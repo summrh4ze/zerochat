@@ -1,17 +1,43 @@
 package main
 
 import (
-	ws "example/zerochat/websocket"
+	"example/zerochat/chatProto"
 	"fmt"
 	"os"
 )
 
 func main() {
-	conn, err := ws.Connect("ws://127.0.0.1:8080/chat")
+	messageChannel, eventChannel, err := chatProto.ConnectToChatServer("127.0.0.1", 8080)
 	if err != nil {
-		fmt.Printf("Error connecting to websocket: %s\n", err)
+		fmt.Printf("Error connecting to chat server: %s\n", err)
 		os.Exit(1)
 	}
 
-	defer conn.Close()
+	shouldQuit := false
+
+	// read from message channel and display the message
+	go func() {
+		for !shouldQuit {
+			msg := <-messageChannel
+			fmt.Printf("\n%s: %s\n", msg.Sender, msg.Content)
+		}
+		fmt.Println("Exiting from read messages loop")
+	}()
+
+	// read user input and write events to the channel
+	var msg string
+	for !shouldQuit {
+		_, err := fmt.Scanln(&msg)
+		if err != nil {
+			fmt.Printf("Error reading user input: %s\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("You have entered %s\n", msg)
+		if msg == "quit" {
+			shouldQuit = true
+		}
+		eventChannel <- chatProto.Event{Type: "msg", Msg: msg}
+	}
+
+	fmt.Println("OUT!")
 }

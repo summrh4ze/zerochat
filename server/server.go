@@ -1,7 +1,17 @@
 package main
 
-import ws "example/zerochat/websocket"
+import (
+	"example/zerochat/chatProto"
+	"fmt"
+)
 
 func main() {
-	ws.Listen(":8080")
+	messageChannel, _ := chatProto.StartChatServer(":8080")
+
+	// only display the messages received from the client
+	fmt.Println("Running loop to display on UI the received messages")
+	for {
+		msg := <-messageChannel
+		fmt.Printf("HOURRAY: You got: %s\n", msg)
+	}
 }
