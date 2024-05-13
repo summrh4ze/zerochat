@@ -1,3 +1,3 @@
 # Zerochat
 
-Simple chat application using websockets implementation from scratch.
+Simple chat application using minimal websockets implementation.

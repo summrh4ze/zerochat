@@ -1,7 +1,7 @@
 package main
 
-import "example/zerochat/websocket"
+import ws "example/zerochat/websocket"
 
 func main() {
-	websocket.Listen(":8080")
+	ws.Listen(":8080")
 }
