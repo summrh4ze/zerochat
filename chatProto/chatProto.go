@@ -159,7 +159,7 @@ func StartChatServer(addr string) (chan string, chan Event) {
 		go handleChatMessages(conn, messageChannel, eventChannel)
 	})
 
-	go http.ListenAndServe(":8080", nil)
+	go http.ListenAndServe("127.0.0.1:8080", nil)
 	return messageChannel, eventChannel
 }
 
