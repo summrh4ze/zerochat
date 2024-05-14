@@ -3,14 +3,17 @@ package main
 import (
 	"example/zerochat/chatProto"
 	"fmt"
+	_ "net/http/pprof"
 )
 
-func main() {
-	messageChannel, _ := chatProto.StartChatServer("127.0.0.1:8080")
-
-	// only display the messages received from the client
-	for {
-		msg := <-messageChannel
+func msgHandler(msg chatProto.Message) {
+	switch msg.Type {
+	case "cmd_send":
 		fmt.Printf("%s: %s\n", msg.Sender, msg.Content)
 	}
+
+}
+
+func main() {
+	chatProto.StartChatServer("127.0.0.1:8080", msgHandler)
 }

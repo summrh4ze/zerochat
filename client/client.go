@@ -5,40 +5,46 @@ import (
 	"example/zerochat/chatProto"
 	"fmt"
 	"os"
+	"strings"
+	"time"
 )
 
+func msgHandler(msg chatProto.Message) {
+	switch msg.Type {
+	case "conn_closed":
+		chatProto.Quit()
+	case "msg":
+		fmt.Printf("\n%s: %s\n", msg.Sender, msg.Content)
+	}
+
+}
+
 func main() {
-	messageChannel, eventChannel, err := chatProto.ConnectToChatServer("127.0.0.1", 8080)
+	err := chatProto.ConnectToChatServer("127.0.0.1", 8080, msgHandler)
 	if err != nil {
 		fmt.Printf("Error connecting to chat server: %s\n", err)
 		os.Exit(1)
 	}
 
-	shouldQuit := false
-
-	// read from message channel and display the message
-	go func() {
-		for !shouldQuit {
-			msg := <-messageChannel
-			fmt.Printf("\n%s: %s\n", msg.Sender, msg.Content)
-		}
-		fmt.Println("Exiting from read messages loop")
-	}()
-
 	// read user input and write events to the channel
 	reader := bufio.NewReader(os.Stdin)
-	for !shouldQuit {
+	for {
 		msg, err := reader.ReadString('\n')
 		if err != nil {
 			fmt.Printf("Error reading user input: %s\n", err)
 			os.Exit(1)
 		}
-		fmt.Printf("You have entered %s\n", msg)
+		// Remove the delimiter from the string
+		msg = strings.Trim(msg, "\r\n")
 		if msg == "quit" {
-			shouldQuit = true
+			fmt.Println("QUITTING.........")
+			chatProto.Quit()
+			break
+		} else {
+			chatProto.SendMsg(chatProto.Message{Type: "cmd_send", Content: msg, Sender: "???", ChatRoom: "public"})
 		}
-		eventChannel <- chatProto.Event{Type: "msg", Msg: msg}
 	}
 
+	time.Sleep(5 * time.Second)
 	fmt.Println("OUT!")
 }

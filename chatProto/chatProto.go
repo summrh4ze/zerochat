@@ -3,6 +3,7 @@ package chatProto
 import (
 	"crypto/sha1"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -13,54 +14,16 @@ import (
 )
 
 var (
-	sharedGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+	sharedGUID           = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+	writeChannel         = make(chan Message)
+	isWriteChannelClosed = false
 )
 
 type Message struct {
+	Type     string
 	Content  string
 	Sender   string
 	ChatRoom string
-}
-
-type Event struct {
-	Type string
-	Msg  string
-}
-
-func runChatProtocol(conn net.Conn, messageChannel chan Message, eventChannel chan Event) {
-	defer conn.Close()
-	fmt.Println("Run Chat Protocol")
-
-	shouldQuit := false
-
-	// this is reading from the TCP connection and writing to the message channel
-	go func() {
-		fmt.Println("Running loop to read from TCP")
-		buffer := make([]byte, 10000)
-		for !shouldQuit {
-			n, err := conn.Read(buffer)
-			if err != nil {
-				eventChannel <- Event{Type: "closed_conn"}
-				fmt.Printf("Error %s\n", err)
-				return
-			} else {
-				messageChannel <- Message{Content: string(buffer[0:n]), Sender: "???", ChatRoom: "public"}
-			}
-		}
-	}()
-
-	// this is reading from the eventChannel and writing to the TCP connection
-	for !shouldQuit {
-		fmt.Println("Running loop to read from eventChannel")
-		ev := <-eventChannel
-		if ev.Type == "quit" || ev.Type == "closed_conn" {
-			shouldQuit = true
-			return
-		}
-		fmt.Printf("Sending %s\n", ev)
-		conn.Write([]byte(ev.Msg))
-	}
-	fmt.Println("Exiting from read eventChannel loop")
 }
 
 type connDialer struct {
@@ -71,42 +34,54 @@ func (cd connDialer) dial(network, addr string) (net.Conn, error) {
 	return cd.c, nil
 }
 
-func handleChatMessages(conn net.Conn, messageChannel chan Message, eventChannel chan Event) {
+func parseMsg(b []byte) (Message, error) {
+	var msg Message
+	err := json.Unmarshal(b, &msg)
+	return msg, err
+}
+
+func runChatProtocol(conn net.Conn, msgHandler func(Message)) {
 	defer conn.Close()
-	fmt.Println("Handle chat messages")
+	fmt.Printf("Handle chat messages on conn %v\n", conn)
 
-	shouldQuit := false
-
-	// here we are reading from TCP connection and writing to messageChannel
+	// here we are reading from TCP connection and sending the message for processing
 	go func() {
-		fmt.Println("Running loop for reading from TCP connection")
 		buffer := make([]byte, 10000)
-		for !shouldQuit {
+		for {
 			n, err := conn.Read(buffer)
 			if err != nil {
-				fmt.Printf("Error: %s\n", err)
-				eventChannel <- Event{Type: "closed_conn"}
-				return
+				fmt.Printf("TCP connection Error: %s\n", err)
+				msgHandler(Message{Type: "conn_closed", Content: "", Sender: "", ChatRoom: ""})
+				break
 			} else {
-				fmt.Printf("You have read %s\n", string(buffer[:n]))
-				messageChannel <- Message{Content: string(buffer[:n]), Sender: "???", ChatRoom: "public"}
+				fmt.Printf("Got TCP message %s\n", string(buffer[:n]))
+				req, err := parseMsg(buffer[:n])
+				if err != nil {
+					fmt.Printf("Error: %s\n", err)
+					continue
+				}
+				msgHandler(req)
 			}
 		}
-		fmt.Println("Exiting from read from TCP loop")
+		fmt.Printf("CLOSING GOROUTINE READING FROM CONNECTION %v\n", conn)
 	}()
 
-	// here we are reading from the event channel and writing to the TCP connection
-	for !shouldQuit {
-		fmt.Println("Running loop for reading from event channel")
-		ev := <-eventChannel
-		if ev.Type == "quit" || ev.Type == "closed_conn" {
-			shouldQuit = true
-			return
+	// here we are reading from the write channel and writing to the TCP connection
+	for msg := range writeChannel {
+		strMsg, err := json.Marshal(msg)
+		if err != nil {
+			fmt.Printf("Error can't send message, failed to marshall into json: %s\n", err)
+			continue
 		}
-		fmt.Printf("Sending %s\n", ev.Msg)
-		conn.Write([]byte(ev.Msg))
+		fmt.Printf("Sending message: %s\n", string(strMsg))
+		_, tcpErr := conn.Write(strMsg)
+		if tcpErr != nil {
+			fmt.Printf("TCP send Error: %s\n", err)
+			// TODO: check what kind of error it is. Not every one should break
+			break
+		}
 	}
-	fmt.Println("Exiting from read from event channel loop")
+	fmt.Printf("CLOSING GOROUTINE HANDLING CONNECTION %v\n", conn)
 }
 
 func computeHandshakeKey(uid string) string {
@@ -120,10 +95,8 @@ func computeHandshakeKey(uid string) string {
 	return finalGUIDEncoded
 }
 
-func StartChatServer(addr string) (chan Message, chan Event) {
+func StartChatServer(addr string, msgHandler func(Message)) {
 	fmt.Printf("chat server listening on %s\n", addr)
-	messageChannel := make(chan Message)
-	eventChannel := make(chan Event)
 
 	http.HandleFunc("/chat", func(w http.ResponseWriter, r *http.Request) {
 		// Check for the existence of Sec-WebSocket-Key Header
@@ -156,27 +129,26 @@ func StartChatServer(addr string) (chan Message, chan Event) {
 			return
 		}
 
-		go handleChatMessages(conn, messageChannel, eventChannel)
+		go runChatProtocol(conn, msgHandler)
 	})
 
-	go http.ListenAndServe(addr, nil)
-	return messageChannel, eventChannel
+	http.ListenAndServe(addr, nil)
 }
 
-func ConnectToChatServer(host string, port uint16) (chan Message, chan Event, error) {
+func ConnectToChatServer(host string, port uint16, msgHandler func(Message)) error {
 	tcpAddr := fmt.Sprintf("%s:%d", host, port)
 	httpAddr := fmt.Sprintf("http://%s/chat", tcpAddr)
 
 	conn, err := net.Dial("tcp", tcpAddr)
 	if err != nil {
 		fmt.Printf("Error: could not connect to %s\n", tcpAddr)
-		return nil, nil, err
+		return err
 	}
 
 	// Set up the handshake http GET request
 	req, err := http.NewRequest("GET", httpAddr, nil)
 	if err != nil {
-		return nil, nil, err
+		return err
 	}
 	clientGuid := uuid.New()
 	encodedGuid := base64.StdEncoding.EncodeToString([]byte(clientGuid.String()))
@@ -191,32 +163,44 @@ func ConnectToChatServer(host string, port uint16) (chan Message, chan Event, er
 	fmt.Printf("Calling %s\n", req.URL)
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, nil, err
+		return err
 	}
 	dump, _ := httputil.DumpResponse(resp, false)
 	fmt.Printf("Handshake Response:\n%s", dump)
 
 	// Verify the Status code
 	if resp.StatusCode != 101 {
-		return nil, nil, ChatServerConnectionError("handshake status code is not 101")
+		return ChatServerConnectionError("handshake status code is not 101")
 	}
 
 	// Verify the Upgrade header to be websocket
 	if resp.Header.Get("Upgrade") != "websocket" || resp.Header.Get("Connection") != "Upgrade" {
-		return nil, nil, ChatServerConnectionError("handshake response is not an upgrade to websocket")
+		return ChatServerConnectionError("handshake response is not an upgrade to websocket")
 	}
 
 	// Verify the Sec-Websocket-Accept header
 	respKey := resp.Header.Get("Sec-Websocket-Accept")
 	expectedKey := computeHandshakeKey(encodedGuid)
 	if expectedKey != respKey {
-		return nil, nil, ChatServerConnectionError("handshake response key is invalid")
+		return ChatServerConnectionError("handshake response key is invalid")
 	}
 
-	messageChannel := make(chan Message)
-	eventChannel := make(chan Event)
+	go runChatProtocol(conn, msgHandler)
 
-	go runChatProtocol(conn, messageChannel, eventChannel)
+	return nil
+}
 
-	return messageChannel, eventChannel, nil
+func Quit() {
+	if !isWriteChannelClosed {
+		close(writeChannel)
+		isWriteChannelClosed = true
+	}
+}
+
+func SendMsg(msg Message) {
+	if !isWriteChannelClosed {
+		writeChannel <- msg
+	} else {
+		fmt.Println("Can't send message. The connection was closed")
+	}
 }
