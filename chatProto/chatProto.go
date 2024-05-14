@@ -1,6 +1,7 @@
 package chatProto
 
 import (
+	"crypto/rand"
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/json"
@@ -9,8 +10,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"strings"
-
-	"github.com/google/uuid"
 )
 
 var (
@@ -150,8 +149,13 @@ func ConnectToChatServer(host string, port uint16, msgHandler func(Message)) err
 	if err != nil {
 		return err
 	}
-	clientGuid := uuid.New()
-	encodedGuid := base64.StdEncoding.EncodeToString([]byte(clientGuid.String()))
+	nonce := make([]byte, 16)
+	_, randerr := rand.Read(nonce)
+	if randerr != nil {
+		return randerr
+	}
+
+	encodedGuid := base64.StdEncoding.EncodeToString(nonce)
 	req.Header.Add("Upgrade", "websocket")
 	req.Header.Add("Connection", "websocket")
 	req.Header.Add("Sec-Websocket-Key", encodedGuid)
