@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"example/zerochat/chatProto"
 	"fmt"
 	"os"
@@ -25,9 +26,9 @@ func main() {
 	}()
 
 	// read user input and write events to the channel
-	var msg string
+	reader := bufio.NewReader(os.Stdin)
 	for !shouldQuit {
-		_, err := fmt.Scanln(&msg)
+		msg, err := reader.ReadString('\n')
 		if err != nil {
 			fmt.Printf("Error reading user input: %s\n", err)
 			os.Exit(1)

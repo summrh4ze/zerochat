@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	sharedGUID = "d0bffdf3-9439-4776-9e5b-a52575d6ead7"
+	sharedGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 )
 
 type Message struct {
@@ -71,7 +71,7 @@ func (cd connDialer) dial(network, addr string) (net.Conn, error) {
 	return cd.c, nil
 }
 
-func handleChatMessages(conn net.Conn, messageChannel chan string, eventChannel chan Event) {
+func handleChatMessages(conn net.Conn, messageChannel chan Message, eventChannel chan Event) {
 	defer conn.Close()
 	fmt.Println("Handle chat messages")
 
@@ -89,7 +89,7 @@ func handleChatMessages(conn net.Conn, messageChannel chan string, eventChannel 
 				return
 			} else {
 				fmt.Printf("You have read %s\n", string(buffer[:n]))
-				messageChannel <- string(buffer[:n])
+				messageChannel <- Message{Content: string(buffer[:n]), Sender: "???", ChatRoom: "public"}
 			}
 		}
 		fmt.Println("Exiting from read from TCP loop")
@@ -120,9 +120,9 @@ func computeHandshakeKey(uid string) string {
 	return finalGUIDEncoded
 }
 
-func StartChatServer(addr string) (chan string, chan Event) {
+func StartChatServer(addr string) (chan Message, chan Event) {
 	fmt.Printf("chat server listening on %s\n", addr)
-	messageChannel := make(chan string)
+	messageChannel := make(chan Message)
 	eventChannel := make(chan Event)
 
 	http.HandleFunc("/chat", func(w http.ResponseWriter, r *http.Request) {
@@ -159,7 +159,7 @@ func StartChatServer(addr string) (chan string, chan Event) {
 		go handleChatMessages(conn, messageChannel, eventChannel)
 	})
 
-	go http.ListenAndServe("127.0.0.1:8080", nil)
+	go http.ListenAndServe(addr, nil)
 	return messageChannel, eventChannel
 }
 
