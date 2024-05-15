@@ -5,6 +5,8 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/json"
+	"example/zerochat/chatProto/errors"
+	websocket "example/zerochat/chatProto/websockets"
 	"fmt"
 	"net"
 	"net/http"
@@ -45,16 +47,16 @@ func runChatProtocol(conn net.Conn, msgHandler func(Message)) {
 
 	// here we are reading from TCP connection and sending the message for processing
 	go func() {
-		buffer := make([]byte, 10000)
+		//buffer := make([]byte, 10000)
 		for {
-			n, err := conn.Read(buffer)
+			payload, err := websocket.ReadMessage(conn)
 			if err != nil {
 				fmt.Printf("TCP connection Error: %s\n", err)
 				msgHandler(Message{Type: "conn_closed", Content: "", Sender: "", ChatRoom: ""})
 				break
 			} else {
-				fmt.Printf("Got TCP message %s\n", string(buffer[:n]))
-				req, err := parseMsg(buffer[:n])
+				fmt.Printf("Got TCP message %s\n", string(payload))
+				req, err := parseMsg(payload)
 				if err != nil {
 					fmt.Printf("Error: %s\n", err)
 					continue
@@ -67,13 +69,13 @@ func runChatProtocol(conn net.Conn, msgHandler func(Message)) {
 
 	// here we are reading from the write channel and writing to the TCP connection
 	for msg := range writeChannel {
-		strMsg, err := json.Marshal(msg)
+		encMsgBytes, err := json.Marshal(msg)
 		if err != nil {
 			fmt.Printf("Error can't send message, failed to marshall into json: %s\n", err)
 			continue
 		}
-		fmt.Printf("Sending message: %s\n", string(strMsg))
-		_, tcpErr := conn.Write(strMsg)
+		fmt.Printf("Sending message: %s\n", []byte(encMsgBytes))
+		tcpErr := websocket.CreateMessage(conn, encMsgBytes, false)
 		if tcpErr != nil {
 			fmt.Printf("TCP send Error: %s\n", err)
 			// TODO: check what kind of error it is. Not every one should break
@@ -174,19 +176,19 @@ func ConnectToChatServer(host string, port uint16, msgHandler func(Message)) err
 
 	// Verify the Status code
 	if resp.StatusCode != 101 {
-		return ChatServerConnectionError("handshake status code is not 101")
+		return errors.ChatServerConnectionError("handshake status code is not 101")
 	}
 
 	// Verify the Upgrade header to be websocket
 	if resp.Header.Get("Upgrade") != "websocket" || resp.Header.Get("Connection") != "Upgrade" {
-		return ChatServerConnectionError("handshake response is not an upgrade to websocket")
+		return errors.ChatServerConnectionError("handshake response is not an upgrade to websocket")
 	}
 
 	// Verify the Sec-Websocket-Accept header
 	respKey := resp.Header.Get("Sec-Websocket-Accept")
 	expectedKey := computeHandshakeKey(encodedGuid)
 	if expectedKey != respKey {
-		return ChatServerConnectionError("handshake response key is invalid")
+		return errors.ChatServerConnectionError("handshake response key is invalid")
 	}
 
 	go runChatProtocol(conn, msgHandler)
