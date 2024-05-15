@@ -5,14 +5,21 @@ import (
 	"example/zerochat/chatProto"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
+
+var id = uuid.New().String()
 
 func msgHandler(msg chatProto.Message) {
 	switch msg.Type {
+	case chatProto.CMD_GET_USERS_RESPONSE:
+		fmt.Printf("%s", msg.Content)
 	case "conn_closed":
-		chatProto.Quit()
+		chatProto.ClientQuit(id)
 	case "msg":
 		fmt.Printf("\n%s: %s\n", msg.Sender, msg.Content)
 	}
@@ -20,7 +27,18 @@ func msgHandler(msg chatProto.Message) {
 }
 
 func main() {
-	err := chatProto.ConnectToChatServer("127.0.0.1", 8080, msgHandler)
+	if len(os.Args) != 2 {
+		fmt.Println("Usage: client <name>")
+		os.Exit(1)
+	}
+	name := os.Args[1]
+	re := regexp.MustCompile(`^[0-9A-Za-z_]*$`)
+	if !re.MatchString(name) {
+		fmt.Println("Name can only contain 0-9 A-Z a-z and _")
+		os.Exit(1)
+	}
+
+	err := chatProto.ConnectToChatServer("127.0.0.1", 8080, name, id, msgHandler)
 	if err != nil {
 		fmt.Printf("Error connecting to chat server: %s\n", err)
 		os.Exit(1)
@@ -38,10 +56,23 @@ func main() {
 		msg = strings.Trim(msg, "\r\n")
 		if msg == "quit" {
 			fmt.Println("QUITTING.........")
-			chatProto.Quit()
+			chatProto.ClientQuit(id)
 			break
 		} else {
-			chatProto.SendMsg(chatProto.Message{Type: "cmd_send", Content: msg, Sender: "???", ChatRoom: "public"})
+			// input cmd::content::<recipient_name,receipient_id>
+			var message chatProto.Message
+			message.Sender = fmt.Sprintf("%s,%s", name, id)
+			for i, part := range strings.Split(msg, "::") {
+				switch i {
+				case 0:
+					message.Type = part
+				case 1:
+					message.Content = part
+				case 2:
+					message.Receipient = part
+				}
+			}
+			chatProto.ClientSendMsg(message, id)
 		}
 	}
 

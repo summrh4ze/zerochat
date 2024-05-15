@@ -8,10 +8,12 @@ import (
 
 func msgHandler(msg chatProto.Message) {
 	switch msg.Type {
-	case "cmd_send":
-		fmt.Printf("%s: %s\n", msg.Sender, msg.Content)
+	case chatProto.CMD_SEND_MSG_SINGLE:
+		fmt.Printf("FROM %s TO %s CONTENT: %s\n", msg.Sender, msg.Receipient, msg.Content)
+	case chatProto.CMD_GET_USERS:
+		fmt.Printf("GET USERS TRIGGERED BY %s\n", msg.Sender)
+		chatProto.GetUsers(msg)
 	}
-
 }
 
 func main() {

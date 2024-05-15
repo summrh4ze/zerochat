@@ -6,7 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"example/zerochat/chatProto/errors"
-	websocket "example/zerochat/chatProto/websockets"
+	"example/zerochat/chatProto/websockets"
 	"fmt"
 	"net"
 	"net/http"
@@ -15,16 +15,23 @@ import (
 )
 
 var (
-	sharedGUID           = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-	writeChannel         = make(chan Message)
-	isWriteChannelClosed = false
+	sharedGUID        = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+	registeredClients = make(map[string]*Client)
 )
 
+type Client struct {
+	conn                 net.Conn
+	writeChannel         chan Message
+	name                 string
+	id                   string
+	isWriteChannelClosed bool
+}
+
 type Message struct {
-	Type     string
-	Content  string
-	Sender   string
-	ChatRoom string
+	Type       string
+	Content    string
+	Sender     string
+	Receipient string
 }
 
 type connDialer struct {
@@ -41,18 +48,18 @@ func parseMsg(b []byte) (Message, error) {
 	return msg, err
 }
 
-func runChatProtocol(conn net.Conn, msgHandler func(Message)) {
-	defer conn.Close()
-	fmt.Printf("Handle chat messages on conn %v\n", conn)
+func runChatProtocol(client *Client, msgHandler func(Message)) {
+	defer client.conn.Close()
+	fmt.Printf("Handle chat messages on conn %v\n", client.conn)
 
 	// here we are reading from TCP connection and sending the message for processing
 	go func() {
 		//buffer := make([]byte, 10000)
 		for {
-			payload, err := websocket.ReadMessage(conn)
+			payload, err := websockets.ReadMessage(client.conn)
 			if err != nil {
 				fmt.Printf("TCP connection Error: %s\n", err)
-				msgHandler(Message{Type: "conn_closed", Content: "", Sender: "", ChatRoom: ""})
+				msgHandler(Message{Type: "conn_closed", Content: "", Sender: ""})
 				break
 			} else {
 				fmt.Printf("Got TCP message %s\n", string(payload))
@@ -64,25 +71,28 @@ func runChatProtocol(conn net.Conn, msgHandler func(Message)) {
 				msgHandler(req)
 			}
 		}
-		fmt.Printf("CLOSING GOROUTINE READING FROM CONNECTION %v\n", conn)
+		fmt.Printf("CLOSING GOROUTINE READING FROM CONNECTION %v\n", client.conn)
+		if !client.isWriteChannelClosed {
+			close(client.writeChannel)
+		}
 	}()
 
 	// here we are reading from the write channel and writing to the TCP connection
-	for msg := range writeChannel {
+	for msg := range client.writeChannel {
 		encMsgBytes, err := json.Marshal(msg)
 		if err != nil {
 			fmt.Printf("Error can't send message, failed to marshall into json: %s\n", err)
 			continue
 		}
 		fmt.Printf("Sending message: %s\n", []byte(encMsgBytes))
-		tcpErr := websocket.CreateMessage(conn, encMsgBytes, false)
+		tcpErr := websockets.CreateMessage(client.conn, encMsgBytes, false)
 		if tcpErr != nil {
 			fmt.Printf("TCP send Error: %s\n", err)
 			// TODO: check what kind of error it is. Not every one should break
 			break
 		}
 	}
-	fmt.Printf("CLOSING GOROUTINE HANDLING CONNECTION %v\n", conn)
+	fmt.Printf("CLOSING GOROUTINE HANDLING CONNECTION %v\n", client.conn)
 }
 
 func computeHandshakeKey(uid string) string {
@@ -108,6 +118,9 @@ func StartChatServer(addr string, msgHandler func(Message)) {
 			http.Error(w, "Header missing Sec-WebSocket-Key", http.StatusBadRequest)
 			return
 		}
+		name := r.URL.Query().Get("name")
+		id := r.URL.Query().Get("id")
+		fmt.Printf("User connected: %s - %s\n", name, id)
 
 		finalGUIDEncoded := computeHandshakeKey(clientGuidEncoded)
 
@@ -130,15 +143,24 @@ func StartChatServer(addr string, msgHandler func(Message)) {
 			return
 		}
 
-		go runChatProtocol(conn, msgHandler)
+		writeChannel := make(chan Message)
+		client := Client{
+			conn:         conn,
+			writeChannel: writeChannel,
+			name:         name,
+			id:           id,
+		}
+		registeredClients[id] = &client
+
+		go runChatProtocol(&client, msgHandler)
 	})
 
 	http.ListenAndServe(addr, nil)
 }
 
-func ConnectToChatServer(host string, port uint16, msgHandler func(Message)) error {
+func ConnectToChatServer(host string, port uint16, name string, id string, msgHandler func(Message)) error {
 	tcpAddr := fmt.Sprintf("%s:%d", host, port)
-	httpAddr := fmt.Sprintf("http://%s/chat", tcpAddr)
+	httpAddr := fmt.Sprintf("http://%s/chat?name=%s&id=%s", tcpAddr, name, id)
 
 	conn, err := net.Dial("tcp", tcpAddr)
 	if err != nil {
@@ -191,22 +213,67 @@ func ConnectToChatServer(host string, port uint16, msgHandler func(Message)) err
 		return errors.ChatServerConnectionError("handshake response key is invalid")
 	}
 
-	go runChatProtocol(conn, msgHandler)
+	writeChannel := make(chan Message)
+
+	user := Client{
+		conn:         conn,
+		writeChannel: writeChannel,
+		name:         name,
+		id:           id,
+	}
+	registeredClients[id] = &user
+
+	go runChatProtocol(&user, msgHandler)
 
 	return nil
 }
 
-func Quit() {
-	if !isWriteChannelClosed {
-		close(writeChannel)
-		isWriteChannelClosed = true
+func ClientQuit(id string) {
+	if len(registeredClients) != 1 {
+		panic("ERROR: client should have been registered in the protocol")
+	}
+	c := registeredClients[id]
+	if !c.isWriteChannelClosed {
+		close(c.writeChannel)
+		c.isWriteChannelClosed = true
 	}
 }
 
-func SendMsg(msg Message) {
-	if !isWriteChannelClosed {
-		writeChannel <- msg
+func ClientSendMsg(msg Message, id string) {
+	if len(registeredClients) != 1 {
+		panic("ERROR: client should have been registered in the protocol")
+	}
+	c := registeredClients[id]
+	if !c.isWriteChannelClosed {
+		c.writeChannel <- msg
 	} else {
 		fmt.Println("Can't send message. The connection was closed")
 	}
+}
+
+func GetUsers(msg Message) {
+	sender := strings.Split(msg.Sender, ",")
+	if len(sender) != 2 {
+		fmt.Println("GET USERS: Can't determine the user that sent the request")
+		return
+	}
+	if c, ok := registeredClients[sender[1]]; !ok {
+		fmt.Printf("GET USERS: %s,%s not registered\n", sender[0], sender[1])
+		return
+	} else {
+		var resp Message
+		resp.Sender = msg.Sender
+		resp.Type = CMD_GET_USERS_RESPONSE
+		fmt.Printf("there are %d clients registered\n", len(registeredClients))
+		users := make([]string, 0, len(registeredClients))
+		for _, v := range registeredClients {
+			res := v.name + "," + v.id
+			fmt.Printf("%s\n", res)
+			users = append(users, res)
+			fmt.Printf("users %v\n", users)
+		}
+		resp.Content = strings.Join(users, "\n")
+		c.writeChannel <- resp
+	}
+
 }
