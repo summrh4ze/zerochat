@@ -11,12 +11,15 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"slices"
 	"strings"
+	"sync"
 )
 
 var (
 	sharedGUID        = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 	registeredClients = make(map[string]*Client)
+	mutex             sync.Mutex
 )
 
 type Client struct {
@@ -93,6 +96,9 @@ func runChatProtocol(client *Client, msgHandler func(Message)) {
 		}
 	}
 	fmt.Printf("CLOSING GOROUTINE HANDLING CONNECTION %v\n", client.conn)
+	mutex.Lock()
+	defer mutex.Unlock()
+	delete(registeredClients, client.id)
 }
 
 func computeHandshakeKey(uid string) string {
@@ -150,6 +156,8 @@ func StartChatServer(addr string, msgHandler func(Message)) {
 			name:         name,
 			id:           id,
 		}
+		mutex.Lock()
+		defer mutex.Unlock()
 		registeredClients[id] = &client
 
 		go runChatProtocol(&client, msgHandler)
@@ -221,6 +229,8 @@ func ConnectToChatServer(host string, port uint16, name string, id string, msgHa
 		name:         name,
 		id:           id,
 	}
+	mutex.Lock()
+	defer mutex.Unlock()
 	registeredClients[id] = &user
 
 	go runChatProtocol(&user, msgHandler)
@@ -229,6 +239,8 @@ func ConnectToChatServer(host string, port uint16, name string, id string, msgHa
 }
 
 func ClientQuit(id string) {
+	mutex.Lock()
+	defer mutex.Unlock()
 	if len(registeredClients) != 1 {
 		panic("ERROR: client should have been registered in the protocol")
 	}
@@ -240,6 +252,8 @@ func ClientQuit(id string) {
 }
 
 func ClientSendMsg(msg Message, id string) {
+	mutex.Lock()
+	defer mutex.Unlock()
 	if len(registeredClients) != 1 {
 		panic("ERROR: client should have been registered in the protocol")
 	}
@@ -251,16 +265,28 @@ func ClientSendMsg(msg Message, id string) {
 	}
 }
 
-func GetUsers(msg Message) {
-	sender := strings.Split(msg.Sender, ",")
-	if len(sender) != 2 {
+func verifyClient(user string) *Client {
+	userDetails := strings.Split(user, ",")
+	if len(userDetails) != 2 {
 		fmt.Println("GET USERS: Can't determine the user that sent the request")
-		return
+		return nil
 	}
-	if c, ok := registeredClients[sender[1]]; !ok {
-		fmt.Printf("GET USERS: %s,%s not registered\n", sender[0], sender[1])
+	mutex.Lock()
+	defer mutex.Unlock()
+	if c, ok := registeredClients[userDetails[1]]; !ok {
+		fmt.Printf("GET USERS: %s,%s not registered\n", userDetails[0], userDetails[1])
+		return nil
+	} else {
+		return c
+	}
+}
+
+func GetUsers(msg Message) {
+	if c := verifyClient(msg.Sender); c == nil {
 		return
 	} else {
+		mutex.Lock()
+		defer mutex.Unlock()
 		var resp Message
 		resp.Sender = msg.Sender
 		resp.Type = CMD_GET_USERS_RESPONSE
@@ -272,8 +298,31 @@ func GetUsers(msg Message) {
 			users = append(users, res)
 			fmt.Printf("users %v\n", users)
 		}
+		// sort users alphabetically
+		slices.Sort(users)
 		resp.Content = strings.Join(users, "\n")
-		c.writeChannel <- resp
-	}
+		if !c.isWriteChannelClosed {
+			c.writeChannel <- resp
+		} else {
+			fmt.Println("Could not send GET_USERS response because the client disconnected")
+		}
 
+	}
+}
+
+func SendMessage(msg Message) {
+	if s := verifyClient(msg.Sender); s == nil {
+		return
+	} else {
+		if r := verifyClient(msg.Receipient); r == nil {
+			fmt.Printf("Error: the receiver of the message does not exist. Aborting SEND_MSG operation.")
+			return
+		} else {
+			if !r.isWriteChannelClosed {
+				r.writeChannel <- msg
+			} else {
+				fmt.Println("Could not send message because the receipient disconnected")
+			}
+		}
+	}
 }

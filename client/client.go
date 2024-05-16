@@ -1,29 +1,163 @@
 package main
 
 import (
-	"bufio"
 	"example/zerochat/chatProto"
 	"fmt"
+	"image"
+	"image/color"
+	"log"
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
+	"gioui.org/app"
+	"gioui.org/layout"
+	"gioui.org/op"
+	"gioui.org/op/clip"
+	"gioui.org/op/paint"
+	"gioui.org/unit"
+	"gioui.org/widget"
+	"gioui.org/widget/material"
 	"github.com/google/uuid"
 )
 
-var id = uuid.New().String()
+var (
+	id            = uuid.New().String()
+	onlineClients = make([]Client, 0, 10)
+	window        *app.Window
+	mutex         = sync.Mutex{}
+	background    = color.NRGBA{R: 0xC0, G: 0xC0, B: 0xC0, A: 0xFF}
+	red           = color.NRGBA{R: 0xC0, G: 0x40, B: 0x40, A: 0xFF}
+	green         = color.NRGBA{R: 0x40, G: 0xC0, B: 0x40, A: 0xFF}
+	blue          = color.NRGBA{R: 0x40, G: 0x40, B: 0xC0, A: 0xFF}
+)
 
+type Client struct {
+	name string
+	id   string
+}
+
+func repaint() {
+	if window != nil {
+		window.Invalidate()
+	}
+}
+
+// this runs on other thread
 func msgHandler(msg chatProto.Message) {
 	switch msg.Type {
 	case chatProto.CMD_GET_USERS_RESPONSE:
-		fmt.Printf("%s", msg.Content)
+		clients := strings.Split(msg.Content, "\n")
+		clientSlice := make([]Client, 0, len(clients))
+		for _, client := range clients {
+			clientDetails := strings.Split(client, ",")
+			if len(clientDetails) != 2 {
+				fmt.Println("ERROR: Got client in incorrect format. Ignoring...")
+				return
+			}
+			clientSlice = append(clientSlice, Client{name: clientDetails[0], id: clientDetails[1]})
+		}
+		mutex.Lock()
+		onlineClients = clientSlice
+		mutex.Unlock()
+		repaint()
 	case "conn_closed":
 		chatProto.ClientQuit(id)
-	case "msg":
+	case chatProto.CMD_SEND_MSG_SINGLE:
 		fmt.Printf("\n%s: %s\n", msg.Sender, msg.Content)
 	}
+}
 
+func run(window *app.Window) error {
+	theme := material.NewTheme()
+	var ops op.Ops
+	for {
+		switch e := window.Event().(type) {
+		case app.DestroyEvent:
+			return e.Err
+		case app.FrameEvent:
+			// This graphics context is used for managing the rendering state.
+			gtx := app.NewContext(&ops, e)
+
+			chatLayout(gtx, theme)
+
+			// Pass the drawing operations to the GPU.
+			e.Frame(gtx.Ops)
+		}
+	}
+}
+
+func ColorBox(gtx layout.Context, size image.Point, color color.NRGBA) layout.Dimensions {
+	defer clip.Rect{Max: size}.Push(gtx.Ops).Pop()
+	paint.ColorOp{Color: color}.Add(gtx.Ops)
+	paint.PaintOp{}.Add(gtx.Ops)
+	return layout.Dimensions{Size: size}
+}
+
+func UserCard(gtx layout.Context, theme *material.Theme, user Client) layout.Dimensions {
+	border := widget.Border{Color: color.NRGBA{A: 0xff}, Width: unit.Dp(2)}
+	return border.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return layout.UniformInset(unit.Dp(5)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			layout.Flex{}.Layout(
+				gtx,
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					circle := clip.Ellipse{
+						Min: image.Pt(0, 0),
+						Max: image.Pt(50, 50),
+					}.Op(gtx.Ops)
+					paint.FillShape(gtx.Ops, blue, circle)
+					return layout.Dimensions{Size: image.Pt(50, 50)}
+				}),
+				layout.Rigid(layout.Spacer{Width: unit.Dp(5)}.Layout),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					size := image.Pt(190, 50)
+					ColorBox(gtx, size, green)
+					label := material.Label(theme, unit.Sp(18), user.name)
+					label.Layout(gtx)
+					return layout.Dimensions{Size: size}
+				}),
+			)
+			return layout.Dimensions{Size: image.Pt(250, 50)}
+		})
+	})
+}
+
+func UsersPanel(gtx layout.Context, theme *material.Theme) layout.Dimensions {
+	return layout.Flex{Axis: layout.Vertical}.Layout(
+		gtx,
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			title := material.H5(theme, "Users")
+			return title.Layout(gtx)
+		}),
+		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+			usersList := layout.List{Axis: layout.Vertical}
+			mutex.Lock()
+			res := usersList.Layout(gtx, len(onlineClients), func(gtx layout.Context, index int) layout.Dimensions {
+				return UserCard(gtx, theme, onlineClients[index])
+			})
+			mutex.Unlock()
+			return res
+		}),
+	)
+}
+
+func chatLayout(gtx layout.Context, theme *material.Theme) layout.Dimensions {
+	return layout.Flex{}.Layout(
+		gtx,
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			border := widget.Border{Color: color.NRGBA{A: 0xff}, Width: unit.Dp(2)}
+			return border.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.UniformInset(unit.Dp(4)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return UsersPanel(gtx, theme)
+				})
+			})
+		}),
+		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+			return ColorBox(gtx, gtx.Constraints.Min, blue)
+		}),
+	)
 }
 
 func main() {
@@ -44,7 +178,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	// read user input and write events to the channel
+	go func() {
+		for {
+			msg := chatProto.Message{
+				Type:       "CMD_GET_USERS",
+				Content:    "",
+				Sender:     fmt.Sprintf("%s,%s", name, id),
+				Receipient: "",
+			}
+			chatProto.ClientSendMsg(msg, id)
+			time.Sleep(2 * time.Second)
+		}
+	}()
+
+	/* // read user input and write events to the channel
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		msg, err := reader.ReadString('\n')
@@ -77,5 +224,20 @@ func main() {
 	}
 
 	time.Sleep(5 * time.Second)
-	fmt.Println("OUT!")
+	fmt.Println("OUT!") */
+
+	go func() {
+		window = new(app.Window)
+		window.Option(
+			app.Title("Zerochat"),
+			app.Size(unit.Dp(800), unit.Dp(500)),
+			app.MinSize(unit.Dp(600), unit.Dp(400)),
+		)
+		err := run(window)
+		if err != nil {
+			log.Fatal(err)
+		}
+		os.Exit(0)
+	}()
+	app.Main()
 }
