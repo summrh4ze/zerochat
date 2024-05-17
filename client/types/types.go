@@ -28,7 +28,7 @@ type UserEvent interface {
 }
 
 type UserDisconnectedEvent struct {
-	id string
+	Id string
 }
 
 type UserConnectedEvent struct {
@@ -36,7 +36,7 @@ type UserConnectedEvent struct {
 }
 
 func (ude UserDisconnectedEvent) GetUserId() string {
-	return ude.id
+	return ude.Id
 }
 
 func (uce UserConnectedEvent) GetUserId() string {

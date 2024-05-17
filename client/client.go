@@ -47,17 +47,32 @@ func msgHandler(msg chatProto.Message) {
 			respUserDetails := strings.Split(client, ",")
 			if len(respUserDetails) != 2 {
 				fmt.Println("ERROR: Got client in incorrect format. Ignoring...")
-				return
+				continue
 			}
 			users = append(users, types.UserDetails{Name: respUserDetails[0], Id: respUserDetails[1]})
 		}
 		registry = types.InitRegistry(users)
-		repaint()
 	case "conn_closed":
 		chatProto.ClientQuit(id)
 	case chatProto.CMD_SEND_MSG_SINGLE:
 		fmt.Printf("\n%s: %s\n", msg.Sender, msg.Content)
+	case chatProto.CMD_USER_CONNECTED:
+		fmt.Printf("User %s connected\n", msg.Content)
+		if registry != nil {
+			ud := strings.Split(msg.Content, ",")
+			if len(ud) != 2 {
+				fmt.Println("Error: Got client in incorrect format. Ignoring...")
+				return
+			}
+			registry.EventChan <- types.UserConnectedEvent{UserDetails: types.UserDetails{Id: ud[1], Name: ud[0]}}
+		}
+	case chatProto.CMD_USER_DISCONNECTED:
+		fmt.Printf("User with id %s disconnected\n", msg.Content)
+		if registry != nil {
+			registry.EventChan <- types.UserDisconnectedEvent{Id: msg.Content}
+		}
 	}
+	repaint()
 }
 
 func run(window *app.Window) error {

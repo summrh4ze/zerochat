@@ -53,6 +53,8 @@ func parseMsg(b []byte) (Message, error) {
 
 func runChatProtocol(client *Client, msgHandler func(Message)) {
 	defer client.conn.Close()
+	// notify all users that a new user connected
+	go notifyConnect(client.name, client.id)
 	fmt.Printf("Handle chat messages on conn %v\n", client.conn)
 
 	// here we are reading from TCP connection and sending the message for processing
@@ -99,6 +101,27 @@ func runChatProtocol(client *Client, msgHandler func(Message)) {
 	mutex.Lock()
 	defer mutex.Unlock()
 	delete(registeredClients, client.id)
+	// notify all users that a user disconnected
+	go notifyDisconnect(client.id)
+}
+
+func notifyDisconnect(clientId string) {
+	for _, rc := range registeredClients {
+		if !rc.isWriteChannelClosed {
+			rc.writeChannel <- Message{Type: CMD_USER_DISCONNECTED, Content: clientId}
+		}
+	}
+}
+
+func notifyConnect(clientName string, clientId string) {
+	for id, rc := range registeredClients {
+		if id != clientId && !rc.isWriteChannelClosed {
+			rc.writeChannel <- Message{
+				Type:    CMD_USER_CONNECTED,
+				Content: fmt.Sprintf("%s,%s", clientName, clientId),
+			}
+		}
+	}
 }
 
 func computeHandshakeKey(uid string) string {
