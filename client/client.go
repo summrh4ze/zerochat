@@ -97,29 +97,48 @@ func ColorBox(gtx layout.Context, size image.Point, color color.NRGBA) layout.Di
 }
 
 func UserCard(gtx layout.Context, theme *material.Theme, user Client) layout.Dimensions {
-	border := widget.Border{Color: color.NRGBA{A: 0xff}, Width: unit.Dp(2)}
-	return border.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return layout.UniformInset(unit.Dp(5)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			layout.Flex{}.Layout(
+	border := widget.Border{Color: color.NRGBA{A: 0xff}, Width: unit.Dp(1)}
+	return layout.Inset{Bottom: unit.Dp(2)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return border.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			gtx.Constraints.Max.X = 300
+			gtx.Constraints.Max.Y = 60
+			dim := layout.Flex{Alignment: layout.Middle, Spacing: layout.SpaceBetween}.Layout(
 				gtx,
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					circle := clip.Ellipse{
-						Min: image.Pt(0, 0),
-						Max: image.Pt(50, 50),
-					}.Op(gtx.Ops)
-					paint.FillShape(gtx.Ops, blue, circle)
-					return layout.Dimensions{Size: image.Pt(50, 50)}
+					dim := layout.UniformInset(unit.Dp(5)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						dim := gtx.Constraints.Max.Y
+						gtx.Constraints.Max = image.Point{X: dim, Y: dim}
+						circle := clip.Ellipse{Max: image.Pt(dim, dim)}.Op(gtx.Ops)
+						paint.FillShape(gtx.Ops, blue, circle)
+						return layout.Dimensions{Size: image.Pt(dim, dim)}
+					})
+					return dim
 				}),
-				layout.Rigid(layout.Spacer{Width: unit.Dp(5)}.Layout),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					size := image.Pt(190, 50)
-					ColorBox(gtx, size, green)
-					label := material.Label(theme, unit.Sp(18), user.name)
-					label.Layout(gtx)
-					return layout.Dimensions{Size: size}
+				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+					fmt.Printf("INSIDE tab label constraints = %#v\n", gtx.Constraints)
+					return layout.Flex{Axis: layout.Vertical}.Layout(
+						gtx,
+						layout.Flexed(0.5, func(gtx layout.Context) layout.Dimensions {
+							size := gtx.Constraints.Max
+							//ColorBox(gtx, size, green)
+							label := material.Label(theme, unit.Sp(16), user.name)
+							label.MaxLines = 1
+							label.Layout(gtx)
+							return layout.Dimensions{Size: size}
+						}),
+						layout.Flexed(0.5, func(gtx layout.Context) layout.Dimensions {
+							size := gtx.Constraints.Max
+							//ColorBox(gtx, size, green)
+							label := material.Label(theme, unit.Sp(12), "Say Hi!")
+							label.MaxLines = 1
+							label.Layout(gtx)
+							return layout.Dimensions{Size: size}
+						}),
+					)
 				}),
 			)
-			return layout.Dimensions{Size: image.Pt(250, 50)}
+			fmt.Printf("SIZE OF TAB FLEX = %#v\n", dim)
+			return dim
 		})
 	})
 }
@@ -128,17 +147,19 @@ func UsersPanel(gtx layout.Context, theme *material.Theme) layout.Dimensions {
 	return layout.Flex{Axis: layout.Vertical}.Layout(
 		gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			title := material.H5(theme, "Users")
-			return title.Layout(gtx)
+			return layout.Inset{Bottom: unit.Dp(10), Left: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				title := material.H5(theme, "Users")
+				return title.Layout(gtx)
+			})
 		}),
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 			usersList := layout.List{Axis: layout.Vertical}
 			mutex.Lock()
-			res := usersList.Layout(gtx, len(onlineClients), func(gtx layout.Context, index int) layout.Dimensions {
+			dim := usersList.Layout(gtx, len(onlineClients), func(gtx layout.Context, index int) layout.Dimensions {
 				return UserCard(gtx, theme, onlineClients[index])
 			})
 			mutex.Unlock()
-			return res
+			return dim
 		}),
 	)
 }
@@ -187,7 +208,7 @@ func main() {
 				Receipient: "",
 			}
 			chatProto.ClientSendMsg(msg, id)
-			time.Sleep(2 * time.Second)
+			time.Sleep(100 * time.Second)
 		}
 	}()
 
