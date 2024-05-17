@@ -293,10 +293,12 @@ func GetUsers(msg Message) {
 		fmt.Printf("there are %d clients registered\n", len(registeredClients))
 		users := make([]string, 0, len(registeredClients))
 		for _, v := range registeredClients {
-			res := v.name + "," + v.id
-			fmt.Printf("%s\n", res)
-			users = append(users, res)
-			fmt.Printf("users %v\n", users)
+			if v.id != c.id {
+				res := v.name + "," + v.id
+				fmt.Printf("%s\n", res)
+				users = append(users, res)
+				fmt.Printf("users %v\n", users)
+			}
 		}
 		// sort users alphabetically
 		slices.Sort(users)

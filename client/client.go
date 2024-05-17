@@ -2,6 +2,8 @@ package main
 
 import (
 	"example/zerochat/chatProto"
+	"example/zerochat/client/types"
+	"example/zerochat/client/ui"
 	"fmt"
 	"image"
 	"image/color"
@@ -9,8 +11,6 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	"sync"
-	"time"
 
 	"gioui.org/app"
 	"gioui.org/layout"
@@ -24,20 +24,12 @@ import (
 )
 
 var (
-	id            = uuid.New().String()
-	onlineClients = make([]Client, 0, 10)
-	window        *app.Window
-	mutex         = sync.Mutex{}
-	background    = color.NRGBA{R: 0xC0, G: 0xC0, B: 0xC0, A: 0xFF}
-	red           = color.NRGBA{R: 0xC0, G: 0x40, B: 0x40, A: 0xFF}
-	green         = color.NRGBA{R: 0x40, G: 0xC0, B: 0x40, A: 0xFF}
-	blue          = color.NRGBA{R: 0x40, G: 0x40, B: 0xC0, A: 0xFF}
+	id       = uuid.New().String()
+	name     string
+	registry *types.Registry
+	window   *app.Window
+	blue     = color.NRGBA{R: 0x40, G: 0x40, B: 0xC0, A: 0xFF}
 )
-
-type Client struct {
-	name string
-	id   string
-}
 
 func repaint() {
 	if window != nil {
@@ -49,19 +41,17 @@ func repaint() {
 func msgHandler(msg chatProto.Message) {
 	switch msg.Type {
 	case chatProto.CMD_GET_USERS_RESPONSE:
-		clients := strings.Split(msg.Content, "\n")
-		clientSlice := make([]Client, 0, len(clients))
-		for _, client := range clients {
-			clientDetails := strings.Split(client, ",")
-			if len(clientDetails) != 2 {
+		respUsers := strings.Split(msg.Content, "\n")
+		users := make([]types.UserDetails, 0, len(respUsers))
+		for _, client := range respUsers {
+			respUserDetails := strings.Split(client, ",")
+			if len(respUserDetails) != 2 {
 				fmt.Println("ERROR: Got client in incorrect format. Ignoring...")
 				return
 			}
-			clientSlice = append(clientSlice, Client{name: clientDetails[0], id: clientDetails[1]})
+			users = append(users, types.UserDetails{Name: respUserDetails[0], Id: respUserDetails[1]})
 		}
-		mutex.Lock()
-		onlineClients = clientSlice
-		mutex.Unlock()
+		registry = types.InitRegistry(users)
 		repaint()
 	case "conn_closed":
 		chatProto.ClientQuit(id)
@@ -96,74 +86,6 @@ func ColorBox(gtx layout.Context, size image.Point, color color.NRGBA) layout.Di
 	return layout.Dimensions{Size: size}
 }
 
-func UserCard(gtx layout.Context, theme *material.Theme, user Client) layout.Dimensions {
-	border := widget.Border{Color: color.NRGBA{A: 0xff}, Width: unit.Dp(1)}
-	return layout.Inset{Bottom: unit.Dp(2)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return border.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			gtx.Constraints.Max.X = 300
-			gtx.Constraints.Max.Y = 60
-			dim := layout.Flex{Alignment: layout.Middle, Spacing: layout.SpaceBetween}.Layout(
-				gtx,
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					dim := layout.UniformInset(unit.Dp(5)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						dim := gtx.Constraints.Max.Y
-						gtx.Constraints.Max = image.Point{X: dim, Y: dim}
-						circle := clip.Ellipse{Max: image.Pt(dim, dim)}.Op(gtx.Ops)
-						paint.FillShape(gtx.Ops, blue, circle)
-						return layout.Dimensions{Size: image.Pt(dim, dim)}
-					})
-					return dim
-				}),
-				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					fmt.Printf("INSIDE tab label constraints = %#v\n", gtx.Constraints)
-					return layout.Flex{Axis: layout.Vertical}.Layout(
-						gtx,
-						layout.Flexed(0.5, func(gtx layout.Context) layout.Dimensions {
-							size := gtx.Constraints.Max
-							//ColorBox(gtx, size, green)
-							label := material.Label(theme, unit.Sp(16), user.name)
-							label.MaxLines = 1
-							label.Layout(gtx)
-							return layout.Dimensions{Size: size}
-						}),
-						layout.Flexed(0.5, func(gtx layout.Context) layout.Dimensions {
-							size := gtx.Constraints.Max
-							//ColorBox(gtx, size, green)
-							label := material.Label(theme, unit.Sp(12), "Say Hi!")
-							label.MaxLines = 1
-							label.Layout(gtx)
-							return layout.Dimensions{Size: size}
-						}),
-					)
-				}),
-			)
-			fmt.Printf("SIZE OF TAB FLEX = %#v\n", dim)
-			return dim
-		})
-	})
-}
-
-func UsersPanel(gtx layout.Context, theme *material.Theme) layout.Dimensions {
-	return layout.Flex{Axis: layout.Vertical}.Layout(
-		gtx,
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return layout.Inset{Bottom: unit.Dp(10), Left: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				title := material.H5(theme, "Users")
-				return title.Layout(gtx)
-			})
-		}),
-		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-			usersList := layout.List{Axis: layout.Vertical}
-			mutex.Lock()
-			dim := usersList.Layout(gtx, len(onlineClients), func(gtx layout.Context, index int) layout.Dimensions {
-				return UserCard(gtx, theme, onlineClients[index])
-			})
-			mutex.Unlock()
-			return dim
-		}),
-	)
-}
-
 func chatLayout(gtx layout.Context, theme *material.Theme) layout.Dimensions {
 	return layout.Flex{}.Layout(
 		gtx,
@@ -171,7 +93,7 @@ func chatLayout(gtx layout.Context, theme *material.Theme) layout.Dimensions {
 			border := widget.Border{Color: color.NRGBA{A: 0xff}, Width: unit.Dp(2)}
 			return border.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return layout.UniformInset(unit.Dp(4)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return UsersPanel(gtx, theme)
+					return ui.UsersPanel{UserRegistry: registry, Self: types.UserDetails{Id: id, Name: name}}.Layout(gtx, theme)
 				})
 			})
 		}),
@@ -186,7 +108,7 @@ func main() {
 		fmt.Println("Usage: client <name>")
 		os.Exit(1)
 	}
-	name := os.Args[1]
+	name = os.Args[1]
 	re := regexp.MustCompile(`^[0-9A-Za-z_]*$`)
 	if !re.MatchString(name) {
 		fmt.Println("Name can only contain 0-9 A-Z a-z and _")
@@ -199,53 +121,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	go func() {
-		for {
-			msg := chatProto.Message{
-				Type:       "CMD_GET_USERS",
-				Content:    "",
-				Sender:     fmt.Sprintf("%s,%s", name, id),
-				Receipient: "",
-			}
-			chatProto.ClientSendMsg(msg, id)
-			time.Sleep(100 * time.Second)
-		}
-	}()
-
-	/* // read user input and write events to the channel
-	reader := bufio.NewReader(os.Stdin)
-	for {
-		msg, err := reader.ReadString('\n')
-		if err != nil {
-			fmt.Printf("Error reading user input: %s\n", err)
-			os.Exit(1)
-		}
-		// Remove the delimiter from the string
-		msg = strings.Trim(msg, "\r\n")
-		if msg == "quit" {
-			fmt.Println("QUITTING.........")
-			chatProto.ClientQuit(id)
-			break
-		} else {
-			// input cmd::content::<recipient_name,receipient_id>
-			var message chatProto.Message
-			message.Sender = fmt.Sprintf("%s,%s", name, id)
-			for i, part := range strings.Split(msg, "::") {
-				switch i {
-				case 0:
-					message.Type = part
-				case 1:
-					message.Content = part
-				case 2:
-					message.Receipient = part
-				}
-			}
-			chatProto.ClientSendMsg(message, id)
-		}
+	// First command is to get all users
+	// After this command the server will send messages when clients connect or disconnect
+	msg := chatProto.Message{
+		Type:       "CMD_GET_USERS",
+		Content:    "",
+		Sender:     fmt.Sprintf("%s,%s", name, id),
+		Receipient: "",
 	}
-
-	time.Sleep(5 * time.Second)
-	fmt.Println("OUT!") */
+	chatProto.ClientSendMsg(msg, id)
 
 	go func() {
 		window = new(app.Window)
