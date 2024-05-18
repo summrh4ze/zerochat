@@ -189,7 +189,7 @@ func StartChatServer(addr string, msgHandler func(Message)) {
 	http.ListenAndServe(addr, nil)
 }
 
-func ConnectToChatServer(host string, port uint16, name string, id string, msgHandler func(Message)) error {
+func ConnectToChatServer(host string, port int, name string, id string, msgHandler func(Message)) error {
 	tcpAddr := fmt.Sprintf("%s:%d", host, port)
 	httpAddr := fmt.Sprintf("http://%s/chat?name=%s&id=%s", tcpAddr, name, id)
 

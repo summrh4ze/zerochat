@@ -19,5 +19,5 @@ func msgHandler(msg chatProto.Message) {
 }
 
 func main() {
-	chatProto.StartChatServer("127.0.0.1:8080", msgHandler)
+	chatProto.StartChatServer(":8080", msgHandler)
 }

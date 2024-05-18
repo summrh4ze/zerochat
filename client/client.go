@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,7 +27,6 @@ var (
 	name     string
 	registry *types.Registry
 	window   *app.Window
-	blue     = color.NRGBA{R: 0x40, G: 0x40, B: 0xC0, A: 0xFF}
 )
 
 func repaint() {
@@ -157,8 +157,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	err := chatProto.ConnectToChatServer("127.0.0.1", 8080, name, id, msgHandler)
+	hostStr := os.Getenv("ZEROCHAT_HOST")
+	portStr := os.Getenv("ZEROCHAT_PORT")
+	port, err := strconv.Atoi(portStr)
 	if err != nil {
+		fmt.Println("ERROR parsing ZEROCHAT_PORT ", err)
+		os.Exit(1)
+	}
+
+	connerr := chatProto.ConnectToChatServer(hostStr, port, name, id, msgHandler)
+	if connerr != nil {
 		fmt.Printf("Error connecting to chat server: %s\n", err)
 		os.Exit(1)
 	}
