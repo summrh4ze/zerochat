@@ -45,10 +45,14 @@ func CreateChatPanel(
 
 	go func() {
 		for id := range chatPanel.changeUserChannel {
+			fmt.Printf("READ CHANNEL CHANGE EVENT %s\n", id)
 			if registry != nil {
 				res, ok := registry.GetUserById(id)
 				if ok {
 					chatPanel.selectedUser = res.UserDetails
+				} else {
+					user := registry.GetSelf()
+					chatPanel.selectedUser = user.UserDetails
 				}
 			}
 		}
@@ -139,21 +143,22 @@ func (chat *ChatPanel) Layout(gtx layout.Context, theme *material.Theme) layout.
 		}),
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 			chat.list.Axis = layout.Vertical
+			chat.list.ScrollToEnd = true
 			return chat.list.Layout(gtx, len(messages), func(gtx layout.Context, index int) layout.Dimensions {
 				max := len(chat.selectedUser.Name)
 				if len(chat.selectedUser.Name) < len(chat.clientDetails.Name) {
 					max = len(chat.clientDetails.Name)
 				}
-				max++
+				max += 5
 
 				display := fmt.Sprintf(
-					"%-*s:%s",
+					"%-*s%s",
 					max,
 					messages[index].Sender.Name,
 					//messages[index].Timestamp.Format(time.Kitchen),
 					messages[index].Content,
 				)
-				lb := material.Label(theme, unit.Sp(14), display)
+				lb := material.Label(theme, unit.Sp(16), display)
 				if messages[index].Sender.Id == chat.clientDetails.Id {
 					lb.Color = grey
 				} else {
@@ -163,6 +168,7 @@ func (chat *ChatPanel) Layout(gtx layout.Context, theme *material.Theme) layout.
 				return lb.Layout(gtx)
 			})
 		}),
+		layout.Rigid(layout.Spacer{Height: unit.Dp(10)}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			chat.input.Submit = true
 			return chat.input.Layout(gtx, theme, "Enter Message")

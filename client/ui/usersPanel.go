@@ -17,7 +17,7 @@ type UsersPanel struct {
 func CreateUsersPanel(registry *types.Registry, self types.UserDetails, changeUserChannel chan<- string) *UsersPanel {
 	return &UsersPanel{
 		userRegistry: registry,
-		selfCard:     UserCard{displayType: DISPLAY_TYPE_SELF, user: self},
+		selfCard:     UserCard{message: "Your Profile", user: self},
 		userList: UserList{
 			userRegistry:      registry,
 			list:              layout.List{Axis: layout.Vertical},
@@ -26,7 +26,14 @@ func CreateUsersPanel(registry *types.Registry, self types.UserDetails, changeUs
 	}
 }
 
+func (up *UsersPanel) processClickEvents(gtx layout.Context) {
+	if up.selfCard.btn.Clicked(gtx) {
+		up.userList.changeUserChannel <- up.selfCard.user.Id
+	}
+}
+
 func (up *UsersPanel) Layout(gtx layout.Context, theme *material.Theme) layout.Dimensions {
+	up.processClickEvents(gtx)
 	return layout.Flex{Axis: layout.Vertical}.Layout(
 		gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {

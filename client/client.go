@@ -136,6 +136,7 @@ func chatLayout(
 				})
 			})
 		}),
+		layout.Rigid(layout.Spacer{Width: unit.Dp(10)}.Layout),
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 			return layout.UniformInset(unit.Dp(4)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return chatPanel.Layout(gtx, theme)

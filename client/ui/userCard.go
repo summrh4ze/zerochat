@@ -13,15 +13,10 @@ import (
 	"gioui.org/widget/material"
 )
 
-const (
-	DISPLAY_TYPE_LAST_MESSAGE = "LAST_MESSAGE"
-	DISPLAY_TYPE_SELF         = "SELF"
-)
-
 type UserCard struct {
-	user        types.UserDetails
-	displayType string
-	btn         widget.Clickable
+	user    types.UserDetails
+	message string
+	btn     widget.Clickable
 }
 
 func (c *UserCard) Layout(gtx layout.Context, theme *material.Theme) layout.Dimensions {
@@ -57,14 +52,7 @@ func (c *UserCard) Layout(gtx layout.Context, theme *material.Theme) layout.Dime
 								}),
 								layout.Flexed(0.5, func(gtx layout.Context) layout.Dimensions {
 									size := gtx.Constraints.Max
-									txt := ""
-									switch c.displayType {
-									case DISPLAY_TYPE_SELF:
-										txt = "This is your profile"
-									case DISPLAY_TYPE_LAST_MESSAGE:
-										txt = "Say Hi!"
-									}
-									label := material.Label(theme, unit.Sp(12), txt)
+									label := material.Label(theme, unit.Sp(12), c.message)
 									label.MaxLines = 1
 									label.Layout(gtx)
 									return layout.Dimensions{Size: size}

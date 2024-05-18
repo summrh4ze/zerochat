@@ -30,6 +30,21 @@ func (list *UserList) processClickEvents(gtx layout.Context) {
 	}
 }
 
+func (list *UserList) getLastMessage(user types.UserDetails) string {
+	message := "Say Hi!"
+	u, ok := list.userRegistry.GetUserById(user.Id)
+	if ok {
+		msgs := u.Messages
+		sort.Slice(msgs, func(i, j int) bool {
+			return msgs[i].Timestamp.Before(msgs[j].Timestamp)
+		})
+		if len(msgs) > 0 {
+			message = msgs[len(msgs)-1].Content
+		}
+	}
+	return message
+}
+
 func (list *UserList) updateUserCards() {
 	userDetails := list.userRegistry.GetUserDetails()
 	sort.Slice(userDetails, func(i, j int) bool {
@@ -60,19 +75,26 @@ func (list *UserList) updateUserCards() {
 		// and rewrite each card to the corresponding user to preserve the order
 		for i, user := range userDetails {
 			if i < len(list.userCards) {
+				message := list.getLastMessage(user)
 				if list.userCards[i] == nil {
 					list.userCards[i] = &UserCard{
-						user:        user,
-						displayType: DISPLAY_TYPE_LAST_MESSAGE,
+						user:    user,
+						message: message,
 					}
 				} else {
 					list.userCards[i].user = user
+					list.userCards[i].message = message
 				}
 			}
 		}
 
 		list.userCards = list.userCards[:len(userDetails)]
 		list.previousData = userDetails
+	} else {
+		for _, userCard := range list.userCards {
+			message := list.getLastMessage(userCard.user)
+			userCard.message = message
+		}
 	}
 }
 
