@@ -5,18 +5,16 @@ import (
 	"example/zerochat/client/types"
 	"example/zerochat/client/ui"
 	"fmt"
-	"image"
 	"image/color"
 	"log"
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"gioui.org/app"
 	"gioui.org/layout"
 	"gioui.org/op"
-	"gioui.org/op/clip"
-	"gioui.org/op/paint"
 	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
@@ -51,11 +49,30 @@ func msgHandler(msg chatProto.Message) {
 			}
 			users = append(users, types.UserDetails{Name: respUserDetails[0], Id: respUserDetails[1]})
 		}
-		registry = types.InitRegistry(users)
+		registry = types.InitRegistry(users, types.UserDetails{Name: name, Id: id})
 	case "conn_closed":
 		chatProto.ClientQuit(id)
 	case chatProto.CMD_SEND_MSG_SINGLE:
 		fmt.Printf("\n%s: %s\n", msg.Sender, msg.Content)
+		if registry != nil {
+			senderDetails := strings.Split(msg.Sender, ",")
+			if len(senderDetails) != 2 {
+				fmt.Println("Error: Message Sender incorrect format. Ignoring...")
+				return
+			}
+			sender, ok := registry.GetUserById(senderDetails[1])
+			if !ok {
+				fmt.Println("Message was sent by unknown user. Ignoring...")
+				return
+			}
+			registry.EventChan <- types.AddMessageToUserEvent{
+				Id: senderDetails[1],
+				Msg: types.Message{
+					Sender:    sender.UserDetails,
+					Content:   msg.Content,
+					Timestamp: time.Now(),
+				}}
+		}
 	case chatProto.CMD_USER_CONNECTED:
 		fmt.Printf("User %s connected\n", msg.Content)
 		if registry != nil {
@@ -77,7 +94,14 @@ func msgHandler(msg chatProto.Message) {
 
 func run(window *app.Window) error {
 	theme := material.NewTheme()
-	usersPanel := ui.CreateUsersPanel(registry, types.UserDetails{Id: id, Name: name})
+	usrChangedChan := make(chan string)
+	usersPanel := ui.CreateUsersPanel(registry, types.UserDetails{Id: id, Name: name}, usrChangedChan)
+	chatPanel := ui.CreateChatPanel(
+		registry,
+		types.UserDetails{Id: id, Name: name},
+		usrChangedChan,
+		types.UserDetails{Id: id, Name: name},
+	)
 
 	var ops op.Ops
 	for {
@@ -88,7 +112,7 @@ func run(window *app.Window) error {
 			// This graphics context is used for managing the rendering state.
 			gtx := app.NewContext(&ops, e)
 
-			chatLayout(gtx, theme, usersPanel)
+			chatLayout(gtx, theme, usersPanel, chatPanel)
 
 			// Pass the drawing operations to the GPU.
 			e.Frame(gtx.Ops)
@@ -96,14 +120,12 @@ func run(window *app.Window) error {
 	}
 }
 
-func ColorBox(gtx layout.Context, size image.Point, color color.NRGBA) layout.Dimensions {
-	defer clip.Rect{Max: size}.Push(gtx.Ops).Pop()
-	paint.ColorOp{Color: color}.Add(gtx.Ops)
-	paint.PaintOp{}.Add(gtx.Ops)
-	return layout.Dimensions{Size: size}
-}
-
-func chatLayout(gtx layout.Context, theme *material.Theme, usersPanel *ui.UsersPanel) layout.Dimensions {
+func chatLayout(
+	gtx layout.Context,
+	theme *material.Theme,
+	usersPanel *ui.UsersPanel,
+	chatPanel *ui.ChatPanel,
+) layout.Dimensions {
 	return layout.Flex{}.Layout(
 		gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -115,7 +137,9 @@ func chatLayout(gtx layout.Context, theme *material.Theme, usersPanel *ui.UsersP
 			})
 		}),
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-			return ColorBox(gtx, gtx.Constraints.Min, blue)
+			return layout.UniformInset(unit.Dp(4)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return chatPanel.Layout(gtx, theme)
+			})
 		}),
 	)
 }

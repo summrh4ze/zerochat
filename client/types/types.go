@@ -1,16 +1,15 @@
 package types
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
 
 type Message struct {
-	Sender     *User
-	Receiver   *User
-	Content    string
-	Attachment []byte
-	Timestamp  time.Time
+	Sender    UserDetails
+	Content   string
+	Timestamp time.Time
 }
 
 type UserDetails struct {
@@ -35,6 +34,16 @@ type UserConnectedEvent struct {
 	UserDetails UserDetails
 }
 
+type AddMessageToUserEvent struct {
+	Id  string
+	Msg Message
+}
+
+type AddMessageToSelfEvent struct {
+	Id  string
+	Msg Message
+}
+
 func (ude UserDisconnectedEvent) GetUserId() string {
 	return ude.Id
 }
@@ -43,15 +52,26 @@ func (uce UserConnectedEvent) GetUserId() string {
 	return uce.UserDetails.Id
 }
 
+func (mse AddMessageToUserEvent) GetUserId() string {
+	return mse.Id
+}
+
+func (mss AddMessageToSelfEvent) GetUserId() string {
+	return mss.Id
+}
+
 type Registry struct {
 	users     map[string]User
+	self      User
 	EventChan chan UserEvent
 	mutex     sync.Mutex
 }
 
-func InitRegistry(userDetails []UserDetails) *Registry {
+func InitRegistry(userDetails []UserDetails, self UserDetails) *Registry {
+	fmt.Printf("\n\n............INITIALIZING REGISTRY...............\n\n\n")
 	reg := Registry{
 		users:     make(map[string]User),
+		self:      User{UserDetails: self, Messages: make([]Message, 0)},
 		EventChan: make(chan UserEvent),
 	}
 	for _, u := range userDetails {
@@ -68,6 +88,12 @@ func InitRegistry(userDetails []UserDetails) *Registry {
 				}
 			case UserDisconnectedEvent:
 				delete(reg.users, e.GetUserId())
+			case AddMessageToUserEvent:
+				user := reg.users[e.GetUserId()]
+				user.Messages = append(user.Messages, event.Msg)
+				reg.users[e.GetUserId()] = user
+			case AddMessageToSelfEvent:
+				reg.self.Messages = append(reg.self.Messages, event.Msg)
 			}
 		}
 	}()
@@ -85,9 +111,13 @@ func (r *Registry) GetUserDetails() []UserDetails {
 	return res
 }
 
-func (r *Registry) HasUser(id string) bool {
+func (r *Registry) GetUserById(id string) (User, bool) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	_, ok := r.users[id]
-	return ok
+	u, ok := r.users[id]
+	return u, ok
+}
+
+func (r *Registry) GetSelf() User {
+	return r.self
 }

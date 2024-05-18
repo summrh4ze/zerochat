@@ -14,18 +14,18 @@ import (
 var blue = color.NRGBA{R: 0x40, G: 0x40, B: 0xC0, A: 0xFF}
 
 type UserList struct {
-	list         layout.List
-	previousData []types.UserDetails
-	userRegistry *types.Registry
-	userCards    []*UserCard
-	selected     int
+	list              layout.List
+	previousData      []types.UserDetails
+	userRegistry      *types.Registry
+	userCards         []*UserCard
+	changeUserChannel chan<- string
 }
 
 func (list *UserList) processClickEvents(gtx layout.Context) {
 	for i, card := range list.userCards {
 		if card.btn.Clicked(gtx) {
 			fmt.Printf("You clicked on item %d\n", i)
-			list.selected = i
+			list.changeUserChannel <- card.user.Id
 		}
 	}
 }

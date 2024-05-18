@@ -14,11 +14,15 @@ type UsersPanel struct {
 	selfCard     UserCard
 }
 
-func CreateUsersPanel(registry *types.Registry, self types.UserDetails) *UsersPanel {
+func CreateUsersPanel(registry *types.Registry, self types.UserDetails, changeUserChannel chan<- string) *UsersPanel {
 	return &UsersPanel{
 		userRegistry: registry,
 		selfCard:     UserCard{displayType: DISPLAY_TYPE_SELF, user: self},
-		userList:     UserList{userRegistry: registry, list: layout.List{Axis: layout.Vertical}},
+		userList: UserList{
+			userRegistry:      registry,
+			list:              layout.List{Axis: layout.Vertical},
+			changeUserChannel: changeUserChannel,
+		},
 	}
 }
 
