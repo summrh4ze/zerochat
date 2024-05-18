@@ -2,7 +2,6 @@ package ui
 
 import (
 	"example/zerochat/client/types"
-	"fmt"
 
 	"gioui.org/layout"
 	"gioui.org/unit"
@@ -10,12 +9,20 @@ import (
 )
 
 type UsersPanel struct {
-	Self         types.UserDetails
-	UserRegistry *types.Registry
+	userRegistry *types.Registry
+	userList     UserList
+	selfCard     UserCard
 }
 
-func (up UsersPanel) Layout(gtx layout.Context, theme *material.Theme) layout.Dimensions {
-	fmt.Printf("Self is %v\n", up.Self)
+func CreateUsersPanel(registry *types.Registry, self types.UserDetails) *UsersPanel {
+	return &UsersPanel{
+		userRegistry: registry,
+		selfCard:     UserCard{displayType: DISPLAY_TYPE_SELF, user: self},
+		userList:     UserList{userRegistry: registry},
+	}
+}
+
+func (up *UsersPanel) Layout(gtx layout.Context, theme *material.Theme) layout.Dimensions {
 	return layout.Flex{Axis: layout.Vertical}.Layout(
 		gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -26,7 +33,7 @@ func (up UsersPanel) Layout(gtx layout.Context, theme *material.Theme) layout.Di
 		}),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return layout.Inset{Bottom: unit.Dp(30)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return UserCard{DisplayType: "SELF"}.Layout(gtx, up.Self, theme)
+				return up.selfCard.Layout(gtx, theme)
 			})
 		}),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -36,7 +43,7 @@ func (up UsersPanel) Layout(gtx layout.Context, theme *material.Theme) layout.Di
 			})
 		}),
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-			return UserList{UserRegistry: up.UserRegistry}.Layout(gtx, theme)
+			return up.userList.Layout(gtx, theme)
 		}),
 	)
 }

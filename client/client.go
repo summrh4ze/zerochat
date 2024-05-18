@@ -77,6 +77,8 @@ func msgHandler(msg chatProto.Message) {
 
 func run(window *app.Window) error {
 	theme := material.NewTheme()
+	usersPanel := ui.CreateUsersPanel(registry, types.UserDetails{Id: id, Name: name})
+
 	var ops op.Ops
 	for {
 		switch e := window.Event().(type) {
@@ -86,7 +88,7 @@ func run(window *app.Window) error {
 			// This graphics context is used for managing the rendering state.
 			gtx := app.NewContext(&ops, e)
 
-			chatLayout(gtx, theme)
+			chatLayout(gtx, theme, usersPanel)
 
 			// Pass the drawing operations to the GPU.
 			e.Frame(gtx.Ops)
@@ -101,14 +103,14 @@ func ColorBox(gtx layout.Context, size image.Point, color color.NRGBA) layout.Di
 	return layout.Dimensions{Size: size}
 }
 
-func chatLayout(gtx layout.Context, theme *material.Theme) layout.Dimensions {
+func chatLayout(gtx layout.Context, theme *material.Theme, usersPanel *ui.UsersPanel) layout.Dimensions {
 	return layout.Flex{}.Layout(
 		gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			border := widget.Border{Color: color.NRGBA{A: 0xff}, Width: unit.Dp(2)}
 			return border.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return layout.UniformInset(unit.Dp(4)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return ui.UsersPanel{UserRegistry: registry, Self: types.UserDetails{Id: id, Name: name}}.Layout(gtx, theme)
+					return usersPanel.Layout(gtx, theme)
 				})
 			})
 		}),

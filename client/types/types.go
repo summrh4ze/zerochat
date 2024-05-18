@@ -84,3 +84,10 @@ func (r *Registry) GetUserDetails() []UserDetails {
 	}
 	return res
 }
+
+func (r *Registry) HasUser(id string) bool {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	_, ok := r.users[id]
+	return ok
+}
