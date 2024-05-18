@@ -14,6 +14,7 @@ import (
 var blue = color.NRGBA{R: 0x40, G: 0x40, B: 0xC0, A: 0xFF}
 
 type UserList struct {
+	list         layout.List
 	previousData []types.UserDetails
 	userRegistry *types.Registry
 	userCards    []*UserCard
@@ -48,7 +49,7 @@ func (list *UserList) updateUserCards() {
 
 	if !same {
 		userDetailsLen := len(userDetails)
-		currentCardsLen := cap(list.userCards)
+		currentCardsLen := len(list.userCards)
 
 		// increase the capacity in case the number of users grows
 		if userDetailsLen > currentCardsLen {
@@ -79,8 +80,7 @@ func (list *UserList) Layout(gtx layout.Context, theme *material.Theme) layout.D
 	if list.userRegistry != nil {
 		list.updateUserCards()
 		list.processClickEvents(gtx)
-		usersList := layout.List{Axis: layout.Vertical}
-		dim := usersList.Layout(gtx, len(list.userCards), func(gtx layout.Context, index int) layout.Dimensions {
+		dim := list.list.Layout(gtx, len(list.userCards), func(gtx layout.Context, index int) layout.Dimensions {
 			return list.userCards[index].Layout(gtx, theme)
 		})
 		return dim

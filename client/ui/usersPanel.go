@@ -18,7 +18,7 @@ func CreateUsersPanel(registry *types.Registry, self types.UserDetails) *UsersPa
 	return &UsersPanel{
 		userRegistry: registry,
 		selfCard:     UserCard{displayType: DISPLAY_TYPE_SELF, user: self},
-		userList:     UserList{userRegistry: registry},
+		userList:     UserList{userRegistry: registry, list: layout.List{Axis: layout.Vertical}},
 	}
 }
 
