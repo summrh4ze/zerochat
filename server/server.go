@@ -2,6 +2,7 @@ package main
 
 import (
 	"example/zerochat/chatProto"
+	"example/zerochat/client/config"
 	"fmt"
 	_ "net/http/pprof"
 )
@@ -19,5 +20,6 @@ func msgHandler(msg chatProto.Message) {
 }
 
 func main() {
-	chatProto.StartChatServer(":8080", msgHandler)
+	cfg := config.ReadServerConfig()
+	chatProto.StartChatServer(fmt.Sprintf("%s:%s", cfg.Host, cfg.Port), msgHandler)
 }

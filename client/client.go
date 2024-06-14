@@ -2,14 +2,13 @@ package main
 
 import (
 	"example/zerochat/chatProto"
+	"example/zerochat/client/config"
 	"example/zerochat/client/types"
 	"example/zerochat/client/ui"
 	"fmt"
 	"image/color"
 	"log"
 	"os"
-	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -103,6 +102,21 @@ func run(window *app.Window) error {
 		types.UserDetails{Id: id, Name: name},
 	)
 
+	profilePanel := ui.ProfilePanel{
+		OnConfirm: func(nick string) {
+			name = nick
+			// First command is to get all users
+			// After this command the server will send messages when clients connect or disconnect
+			msg := chatProto.Message{
+				Type:       "CMD_GET_USERS",
+				Content:    "",
+				Sender:     fmt.Sprintf("%s,%s", name, id),
+				Receipient: "",
+			}
+			chatProto.ClientSendMsg(msg, id)
+		},
+	}
+
 	var ops op.Ops
 	for {
 		switch e := window.Event().(type) {
@@ -112,7 +126,11 @@ func run(window *app.Window) error {
 			// This graphics context is used for managing the rendering state.
 			gtx := app.NewContext(&ops, e)
 
-			chatLayout(gtx, theme, usersPanel, chatPanel)
+			if name == "" {
+				profilePanel.Layout(gtx, theme)
+			} else {
+				chatScreen(gtx, theme, usersPanel, chatPanel)
+			}
 
 			// Pass the drawing operations to the GPU.
 			e.Frame(gtx.Ops)
@@ -120,7 +138,7 @@ func run(window *app.Window) error {
 	}
 }
 
-func chatLayout(
+func chatScreen(
 	gtx layout.Context,
 	theme *material.Theme,
 	usersPanel *ui.UsersPanel,
@@ -146,40 +164,12 @@ func chatLayout(
 }
 
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Println("Usage: client <name>")
-		os.Exit(1)
-	}
-	name = os.Args[1]
-	re := regexp.MustCompile(`^[0-9A-Za-z_]*$`)
-	if !re.MatchString(name) {
-		fmt.Println("Name can only contain 0-9 A-Z a-z and _")
-		os.Exit(1)
-	}
-
-	hostStr := os.Getenv("ZEROCHAT_HOST")
-	portStr := os.Getenv("ZEROCHAT_PORT")
-	port, err := strconv.Atoi(portStr)
+	cfg := config.ReadClientConfig()
+	err := chatProto.ConnectToChatServer(cfg.Host, cfg.Port, name, id, msgHandler)
 	if err != nil {
-		fmt.Println("ERROR parsing ZEROCHAT_PORT ", err)
-		os.Exit(1)
-	}
-
-	connerr := chatProto.ConnectToChatServer(hostStr, port, name, id, msgHandler)
-	if connerr != nil {
 		fmt.Printf("Error connecting to chat server: %s\n", err)
 		os.Exit(1)
 	}
-
-	// First command is to get all users
-	// After this command the server will send messages when clients connect or disconnect
-	msg := chatProto.Message{
-		Type:       "CMD_GET_USERS",
-		Content:    "",
-		Sender:     fmt.Sprintf("%s,%s", name, id),
-		Receipient: "",
-	}
-	chatProto.ClientSendMsg(msg, id)
 
 	go func() {
 		window = new(app.Window)

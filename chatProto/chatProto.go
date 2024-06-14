@@ -189,8 +189,8 @@ func StartChatServer(addr string, msgHandler func(Message)) {
 	http.ListenAndServe(addr, nil)
 }
 
-func ConnectToChatServer(host string, port int, name string, id string, msgHandler func(Message)) error {
-	tcpAddr := fmt.Sprintf("%s:%d", host, port)
+func ConnectToChatServer(host string, port string, name string, id string, msgHandler func(Message)) error {
+	tcpAddr := fmt.Sprintf("%s:%s", host, port)
 	httpAddr := fmt.Sprintf("http://%s/chat?name=%s&id=%s", tcpAddr, name, id)
 
 	conn, err := net.Dial("tcp", tcpAddr)
