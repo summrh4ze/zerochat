@@ -72,15 +72,32 @@ func (list *UserList) updateUserCards() {
 		return 0
 	})
 
-	list.userCards = list.userCards[0:0]
+	usersLen := len(users)
+	currentCardsLen := len(list.userCards)
 
-	for _, user := range users {
-		message := list.getLastMessage(user)
-		list.userCards = append(list.userCards, &UserCard{
-			user:    user,
-			message: message,
-		})
+	// increase the capacity in case the number of users grows
+	if usersLen > currentCardsLen {
+		buf := make([]*UserCard, usersLen-currentCardsLen)
+		list.userCards = append(list.userCards, buf...)
 	}
+
+	// and rewrite each card to the corresponding user to preserve the order
+	for i, user := range users {
+		if i < len(list.userCards) {
+			message := list.getLastMessage(user)
+			if list.userCards[i] == nil {
+				list.userCards[i] = &UserCard{
+					user:    user,
+					message: message,
+				}
+			} else {
+				list.userCards[i].user = user
+				list.userCards[i].message = message
+			}
+		}
+	}
+
+	list.userCards = list.userCards[:len(users)]
 }
 
 func (list *UserList) Layout(gtx layout.Context, theme *material.Theme) layout.Dimensions {
