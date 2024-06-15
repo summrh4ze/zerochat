@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"example/zerochat/client/types"
+	"example/zerochat/client/users"
 	"image"
 	"image/color"
 
@@ -15,7 +15,7 @@ import (
 )
 
 type UserCard struct {
-	user    types.UserDetails
+	user    users.UserDetails
 	message string
 	btn     widget.Clickable
 }

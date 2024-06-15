@@ -3,8 +3,8 @@ package main
 import (
 	"example/zerochat/chatProto"
 	"example/zerochat/client/config"
-	"example/zerochat/client/types"
 	"example/zerochat/client/ui"
+	"example/zerochat/client/users"
 	"fmt"
 	"image"
 	"image/color"
@@ -26,7 +26,7 @@ var (
 	id       = uuid.New().String()
 	name     string
 	icon     image.Image
-	registry *types.Registry
+	registry *users.Registry
 	window   *app.Window
 )
 
@@ -41,16 +41,16 @@ func msgHandler(msg chatProto.Message) {
 	switch msg.Type {
 	case chatProto.CMD_GET_USERS_RESPONSE:
 		respUsers := strings.Split(msg.Content, "\n")
-		users := make([]types.UserDetails, 0, len(respUsers))
+		onlineUsers := make([]users.UserDetails, 0, len(respUsers))
 		for _, client := range respUsers {
 			respUserDetails := strings.Split(client, ",")
 			if len(respUserDetails) != 2 {
 				fmt.Println("ERROR: Got client in incorrect format. Ignoring...")
 				continue
 			}
-			users = append(users, types.UserDetails{Name: respUserDetails[0], Id: respUserDetails[1], Avatar: icon})
+			onlineUsers = append(onlineUsers, users.UserDetails{Name: respUserDetails[0], Id: respUserDetails[1], Avatar: icon})
 		}
-		registry = types.InitRegistry(users, types.UserDetails{Name: name, Id: id, Avatar: icon})
+		registry = users.InitRegistry(onlineUsers, users.UserDetails{Name: name, Id: id, Avatar: icon})
 	case "conn_closed":
 		chatProto.ClientQuit(id)
 	case chatProto.CMD_SEND_MSG_SINGLE:
@@ -66,9 +66,9 @@ func msgHandler(msg chatProto.Message) {
 				fmt.Println("Message was sent by unknown user. Ignoring...")
 				return
 			}
-			registry.EventChan <- types.AddMessageToUserEvent{
+			registry.EventChan <- users.AddMessageToUserEvent{
 				Id: senderDetails[1],
-				Msg: types.Message{
+				Msg: users.Message{
 					Sender:    sender.UserDetails,
 					Content:   msg.Content,
 					Timestamp: time.Now(),
@@ -82,12 +82,12 @@ func msgHandler(msg chatProto.Message) {
 				fmt.Println("Error: Got client in incorrect format. Ignoring...")
 				return
 			}
-			registry.EventChan <- types.UserConnectedEvent{UserDetails: types.UserDetails{Id: ud[1], Name: ud[0], Avatar: icon}}
+			registry.EventChan <- users.UserConnectedEvent{UserDetails: users.UserDetails{Id: ud[1], Name: ud[0], Avatar: icon}}
 		}
 	case chatProto.CMD_USER_DISCONNECTED:
 		fmt.Printf("User with id %s disconnected\n", msg.Content)
 		if registry != nil {
-			registry.EventChan <- types.UserDisconnectedEvent{Id: msg.Content}
+			registry.EventChan <- users.UserDisconnectedEvent{Id: msg.Content}
 		}
 	}
 	repaint()
@@ -96,12 +96,12 @@ func msgHandler(msg chatProto.Message) {
 func run(window *app.Window) error {
 	theme := material.NewTheme()
 	usrChangedChan := make(chan string)
-	usersPanel := ui.CreateUsersPanel(registry, types.UserDetails{Id: id, Name: name, Avatar: icon}, usrChangedChan)
+	usersPanel := ui.CreateUsersPanel(registry, users.UserDetails{Id: id, Name: name, Avatar: icon}, usrChangedChan)
 	chatPanel := ui.CreateChatPanel(
 		registry,
-		types.UserDetails{Id: id, Name: name, Avatar: icon},
+		users.UserDetails{Id: id, Name: name, Avatar: icon},
 		usrChangedChan,
-		types.UserDetails{Id: id, Name: name, Avatar: icon},
+		users.UserDetails{Id: id, Name: name, Avatar: icon},
 	)
 
 	if img, err := ui.CreateDefaultImage(); err == nil {

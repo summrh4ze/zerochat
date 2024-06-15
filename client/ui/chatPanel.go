@@ -2,7 +2,7 @@ package ui
 
 import (
 	"example/zerochat/chatProto"
-	"example/zerochat/client/types"
+	"example/zerochat/client/users"
 	"fmt"
 	"image/color"
 	"sort"
@@ -22,19 +22,19 @@ var (
 )
 
 type ChatPanel struct {
-	clientDetails     types.UserDetails
-	registry          *types.Registry
+	clientDetails     users.UserDetails
+	registry          *users.Registry
 	input             component.TextField
-	selectedUser      types.UserDetails
+	selectedUser      users.UserDetails
 	changeUserChannel <-chan string
 	list              widget.List
 }
 
 func CreateChatPanel(
-	registry *types.Registry,
-	selectedUser types.UserDetails,
+	registry *users.Registry,
+	selectedUser users.UserDetails,
 	changeUserChannel <-chan string,
-	clientDetails types.UserDetails,
+	clientDetails users.UserDetails,
 ) *ChatPanel {
 	chatPanel := &ChatPanel{
 		clientDetails:     clientDetails,
@@ -61,16 +61,16 @@ func CreateChatPanel(
 	return chatPanel
 }
 
-func (chat *ChatPanel) getMessages() []types.Message {
+func (chat *ChatPanel) getMessages() []users.Message {
 	if chat.registry != nil {
-		var messages []types.Message
+		var messages []users.Message
 		if chat.selectedUser.Id == chat.clientDetails.Id {
 			user := chat.registry.GetSelf()
 			messages = user.Messages
 		} else {
 			user, ok := chat.registry.GetUserById(chat.selectedUser.Id)
 			if !ok {
-				return []types.Message{}
+				return []users.Message{}
 			}
 			messages = user.Messages
 		}
@@ -80,7 +80,7 @@ func (chat *ChatPanel) getMessages() []types.Message {
 		return messages
 
 	}
-	return []types.Message{}
+	return []users.Message{}
 }
 
 func (chat *ChatPanel) processEvents(gtx layout.Context) {
@@ -106,18 +106,18 @@ func (chat *ChatPanel) processEvents(gtx layout.Context) {
 					Content:    t,
 				}
 				chatProto.ClientSendMsg(msg, chat.clientDetails.Id)
-				chat.registry.EventChan <- types.AddMessageToUserEvent{
+				chat.registry.EventChan <- users.AddMessageToUserEvent{
 					Id: chat.selectedUser.Id,
-					Msg: types.Message{
+					Msg: users.Message{
 						Sender:    chat.clientDetails,
 						Content:   t,
 						Timestamp: time.Now(),
 					},
 				}
 			} else {
-				chat.registry.EventChan <- types.AddMessageToSelfEvent{
+				chat.registry.EventChan <- users.AddMessageToSelfEvent{
 					Id: chat.clientDetails.Id,
-					Msg: types.Message{
+					Msg: users.Message{
 						Sender:    chat.clientDetails,
 						Content:   t,
 						Timestamp: time.Now(),

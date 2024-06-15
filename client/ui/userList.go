@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"example/zerochat/client/types"
+	"example/zerochat/client/users"
 	"fmt"
 	"image/color"
 	"sort"
@@ -15,8 +15,8 @@ var blue = color.NRGBA{R: 0x40, G: 0x40, B: 0xC0, A: 0xFF}
 
 type UserList struct {
 	list              layout.List
-	previousData      []types.UserDetails
-	userRegistry      *types.Registry
+	previousData      []users.UserDetails
+	userRegistry      *users.Registry
 	userCards         []*UserCard
 	changeUserChannel chan<- string
 }
@@ -30,7 +30,7 @@ func (list *UserList) processClickEvents(gtx layout.Context) {
 	}
 }
 
-func (list *UserList) getLastMessage(user types.UserDetails) string {
+func (list *UserList) getLastMessage(user users.UserDetails) string {
 	message := "Say Hi!"
 	u, ok := list.userRegistry.GetUserById(user.Id)
 	if ok {
