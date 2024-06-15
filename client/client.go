@@ -6,6 +6,7 @@ import (
 	"example/zerochat/client/types"
 	"example/zerochat/client/ui"
 	"fmt"
+	"image"
 	"image/color"
 	"log"
 	"os"
@@ -24,6 +25,7 @@ import (
 var (
 	id       = uuid.New().String()
 	name     string
+	icon     image.Image
 	registry *types.Registry
 	window   *app.Window
 )
@@ -46,9 +48,9 @@ func msgHandler(msg chatProto.Message) {
 				fmt.Println("ERROR: Got client in incorrect format. Ignoring...")
 				continue
 			}
-			users = append(users, types.UserDetails{Name: respUserDetails[0], Id: respUserDetails[1]})
+			users = append(users, types.UserDetails{Name: respUserDetails[0], Id: respUserDetails[1], Avatar: icon})
 		}
-		registry = types.InitRegistry(users, types.UserDetails{Name: name, Id: id})
+		registry = types.InitRegistry(users, types.UserDetails{Name: name, Id: id, Avatar: icon})
 	case "conn_closed":
 		chatProto.ClientQuit(id)
 	case chatProto.CMD_SEND_MSG_SINGLE:
@@ -80,7 +82,7 @@ func msgHandler(msg chatProto.Message) {
 				fmt.Println("Error: Got client in incorrect format. Ignoring...")
 				return
 			}
-			registry.EventChan <- types.UserConnectedEvent{UserDetails: types.UserDetails{Id: ud[1], Name: ud[0]}}
+			registry.EventChan <- types.UserConnectedEvent{UserDetails: types.UserDetails{Id: ud[1], Name: ud[0], Avatar: icon}}
 		}
 	case chatProto.CMD_USER_DISCONNECTED:
 		fmt.Printf("User with id %s disconnected\n", msg.Content)
@@ -94,18 +96,32 @@ func msgHandler(msg chatProto.Message) {
 func run(window *app.Window) error {
 	theme := material.NewTheme()
 	usrChangedChan := make(chan string)
-	usersPanel := ui.CreateUsersPanel(registry, types.UserDetails{Id: id, Name: name}, usrChangedChan)
+	usersPanel := ui.CreateUsersPanel(registry, types.UserDetails{Id: id, Name: name, Avatar: icon}, usrChangedChan)
 	chatPanel := ui.CreateChatPanel(
 		registry,
-		types.UserDetails{Id: id, Name: name},
+		types.UserDetails{Id: id, Name: name, Avatar: icon},
 		usrChangedChan,
-		types.UserDetails{Id: id, Name: name},
+		types.UserDetails{Id: id, Name: name, Avatar: icon},
 	)
 
+	if img, err := ui.CreateDefaultImage(); err == nil {
+		icon = img
+	}
+
 	profilePanel := ui.ProfilePanel{
+		Avatar: icon,
 		OnConfirm: func(nick string) {
 			name = nick
-			// First command is to get all users
+
+			// First connect to the client
+			cfg := config.ReadClientConfig()
+			err := chatProto.ConnectToChatServer(cfg.Host, cfg.Port, name, id, msgHandler)
+			if err != nil {
+				fmt.Printf("Error connecting to chat server: %s\n", err)
+				os.Exit(1)
+			}
+
+			// Then execute first command to get all users
 			// After this command the server will send messages when clients connect or disconnect
 			msg := chatProto.Message{
 				Type:       "CMD_GET_USERS",
@@ -114,6 +130,11 @@ func run(window *app.Window) error {
 				Receipient: "",
 			}
 			chatProto.ClientSendMsg(msg, id)
+		},
+		OnImageLoad: func(image image.Image) {
+			fmt.Println("Got image. Repainting...")
+			icon = image
+			repaint()
 		},
 	}
 
@@ -164,13 +185,6 @@ func chatScreen(
 }
 
 func main() {
-	cfg := config.ReadClientConfig()
-	err := chatProto.ConnectToChatServer(cfg.Host, cfg.Port, name, id, msgHandler)
-	if err != nil {
-		fmt.Printf("Error connecting to chat server: %s\n", err)
-		os.Exit(1)
-	}
-
 	go func() {
 		window = new(app.Window)
 		window.Option(

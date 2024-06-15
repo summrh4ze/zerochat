@@ -2,6 +2,7 @@ package types
 
 import (
 	"fmt"
+	"image"
 	"sync"
 	"time"
 )
@@ -13,8 +14,9 @@ type Message struct {
 }
 
 type UserDetails struct {
-	Id   string
-	Name string
+	Id     string
+	Name   string
+	Avatar image.Image
 }
 
 type User struct {

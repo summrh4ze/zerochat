@@ -11,6 +11,7 @@ import (
 	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
+	"golang.org/x/image/draw"
 )
 
 type UserCard struct {
@@ -34,9 +35,17 @@ func (c *UserCard) Layout(gtx layout.Context, theme *material.Theme) layout.Dime
 							dim := layout.UniformInset(unit.Dp(5)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 								dim := gtx.Constraints.Max.Y
 								gtx.Constraints.Max = image.Point{X: dim, Y: dim}
-								circle := clip.Ellipse{Max: image.Pt(dim, dim)}.Op(gtx.Ops)
-								paint.FillShape(gtx.Ops, blue, circle)
-								return layout.Dimensions{Size: image.Pt(dim, dim)}
+								if c.user.Avatar != nil {
+									img := image.NewRGBA(image.Rectangle{Max: image.Point{X: dim, Y: dim}})
+									draw.CatmullRom.Scale(img, img.Bounds(), c.user.Avatar, c.user.Avatar.Bounds(), draw.Src, nil)
+									imgWidget := widget.Image{Src: paint.NewImageOp(img)}
+									imgWidget.Scale = float32(dim) / float32(gtx.Dp(unit.Dp(float32(dim))))
+									return imgWidget.Layout(gtx)
+								} else {
+									circle := clip.Ellipse{Max: image.Pt(dim, dim)}.Op(gtx.Ops)
+									paint.FillShape(gtx.Ops, blue, circle)
+									return layout.Dimensions{Size: image.Pt(dim, dim)}
+								}
 							})
 							return dim
 						}),
