@@ -2,11 +2,10 @@ package ui
 
 import (
 	"example/zerochat/chatProto"
-	"example/zerochat/client/users"
+	"example/zerochat/chatProto/domain"
 	"fmt"
 	"image/color"
-	"sort"
-	"time"
+	"slices"
 
 	"gioui.org/font"
 	"gioui.org/layout"
@@ -22,38 +21,31 @@ var (
 )
 
 type ChatPanel struct {
-	clientDetails     users.UserDetails
-	registry          *users.Registry
+	client            *domain.Client
+	selectedUser      *domain.User
 	input             component.TextField
-	selectedUser      users.UserDetails
 	changeUserChannel <-chan string
 	list              widget.List
 }
 
 func CreateChatPanel(
-	registry *users.Registry,
-	selectedUser users.UserDetails,
+	client *domain.Client,
 	changeUserChannel <-chan string,
-	clientDetails users.UserDetails,
 ) *ChatPanel {
 	chatPanel := &ChatPanel{
-		clientDetails:     clientDetails,
-		registry:          registry,
-		selectedUser:      selectedUser,
+		client:            client,
 		changeUserChannel: changeUserChannel,
+		selectedUser:      client.User,
 	}
 
 	go func() {
 		for id := range chatPanel.changeUserChannel {
 			fmt.Printf("READ CHANNEL CHANGE EVENT %s\n", id)
-			if registry != nil {
-				res, ok := registry.GetUserById(id)
-				if ok {
-					chatPanel.selectedUser = res.UserDetails
-				} else {
-					user := registry.GetSelf()
-					chatPanel.selectedUser = user.UserDetails
-				}
+			res, ok := client.ActiveUsers[id]
+			if ok {
+				chatPanel.selectedUser = res
+			} else {
+				chatPanel.selectedUser = client.User
 			}
 		}
 	}()
@@ -61,26 +53,26 @@ func CreateChatPanel(
 	return chatPanel
 }
 
-func (chat *ChatPanel) getMessages() []users.Message {
-	if chat.registry != nil {
-		var messages []users.Message
-		if chat.selectedUser.Id == chat.clientDetails.Id {
-			user := chat.registry.GetSelf()
-			messages = user.Messages
-		} else {
-			user, ok := chat.registry.GetUserById(chat.selectedUser.Id)
-			if !ok {
-				return []users.Message{}
-			}
-			messages = user.Messages
+func (chat *ChatPanel) getMessages() []*domain.Message {
+	var messages []*domain.Message
+	if chat.selectedUser.Id == chat.client.User.Id {
+		messages = chat.client.Draft
+	} else {
+		chatHistory, ok := chat.client.ChatHistory[chat.selectedUser.Id]
+		if !ok {
+			return []*domain.Message{}
 		}
-		sort.Slice(messages, func(i, j int) bool {
-			return messages[i].Timestamp.Before(messages[i].Timestamp)
-		})
-		return messages
-
+		messages = chatHistory
 	}
-	return []users.Message{}
+	slices.SortFunc(messages, func(a, b *domain.Message) int {
+		if a.Timestamp.Before(b.Timestamp) {
+			return -1
+		} else if a.Timestamp.After(b.Timestamp) {
+			return 1
+		}
+		return 1
+	})
+	return messages
 }
 
 func (chat *ChatPanel) processEvents(gtx layout.Context) {
@@ -98,33 +90,25 @@ func (chat *ChatPanel) processEvents(gtx layout.Context) {
 			if t == "" {
 				return
 			}
-			if chat.selectedUser.Id != chat.clientDetails.Id {
-				msg := chatProto.Message{
-					Type:       chatProto.CMD_SEND_MSG_SINGLE,
-					Sender:     fmt.Sprintf("%s,%s", chat.clientDetails.Name, chat.clientDetails.Id),
-					Receipient: fmt.Sprintf("%s,%s", chat.selectedUser.Name, chat.selectedUser.Id),
-					Content:    t,
+			if chat.selectedUser.Id != chat.client.User.Id {
+				msg := &domain.Message{
+					Type:     chatProto.CMD_SEND_MSG_SINGLE,
+					Sender:   *chat.client.User,
+					Reciever: *chat.selectedUser,
+					Content:  []byte(t),
 				}
-				chatProto.ClientSendMsg(msg, chat.clientDetails.Id)
-				chat.registry.EventChan <- users.AddMessageToUserEvent{
-					Id: chat.selectedUser.Id,
-					Msg: users.Message{
-						Sender:    chat.clientDetails,
-						Content:   t,
-						Timestamp: time.Now(),
-					},
-				}
+				chat.client.WriteChan <- msg
+				chatHistory := chat.client.ChatHistory[chat.selectedUser.Id]
+				chat.client.ChatHistory[chat.selectedUser.Id] = append(chatHistory, msg)
 			} else {
-				chat.registry.EventChan <- users.AddMessageToSelfEvent{
-					Id: chat.clientDetails.Id,
-					Msg: users.Message{
-						Sender:    chat.clientDetails,
-						Content:   t,
-						Timestamp: time.Now(),
-					},
+				msg := &domain.Message{
+					Type:     chatProto.CMD_SEND_MSG_SINGLE,
+					Sender:   *chat.client.User,
+					Reciever: *chat.client.User,
+					Content:  []byte(t),
 				}
+				chat.client.Draft = append(chat.client.Draft, msg)
 			}
-
 		}
 	}
 }
@@ -146,8 +130,8 @@ func (chat *ChatPanel) Layout(gtx layout.Context, theme *material.Theme) layout.
 			chat.list.ScrollToEnd = true
 			return chat.list.Layout(gtx, len(messages), func(gtx layout.Context, index int) layout.Dimensions {
 				max := len(chat.selectedUser.Name)
-				if len(chat.selectedUser.Name) < len(chat.clientDetails.Name) {
-					max = len(chat.clientDetails.Name)
+				if len(chat.selectedUser.Name) < len(chat.client.User.Name) {
+					max = len(chat.client.User.Name)
 				}
 				max += 5
 
@@ -159,7 +143,7 @@ func (chat *ChatPanel) Layout(gtx layout.Context, theme *material.Theme) layout.
 					messages[index].Content,
 				)
 				lb := material.Label(theme, unit.Sp(16), display)
-				if messages[index].Sender.Id == chat.clientDetails.Id {
+				if messages[index].Sender.Id == chat.client.User.Id {
 					lb.Color = grey
 				} else {
 					lb.Color = red

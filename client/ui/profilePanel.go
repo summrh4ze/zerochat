@@ -1,9 +1,11 @@
 package ui
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"image"
+	"image/jpeg"
 	"os"
 
 	"gioui.org/layout"
@@ -30,12 +32,12 @@ type ProfilePanel struct {
 	photobutton widget.Clickable
 	expl        explorer.Explorer
 	imgChan     chan imageResult
-	Avatar      image.Image
+	Avatar      []byte
 	OnConfirm   func(string)
-	OnImageLoad func(image.Image)
+	OnImageLoad func([]byte)
 }
 
-func CreateDefaultImage() (image.Image, error) {
+func CreateDefaultImage() ([]byte, error) {
 	data, err := os.ReadFile("placeholder.png")
 	if err != nil {
 		fmt.Printf("Error %s\n", err)
@@ -50,7 +52,11 @@ func CreateDefaultImage() (image.Image, error) {
 
 	scaledImg := image.NewRGBA(image.Rectangle{Max: image.Point{X: IMAGE_SIZE, Y: IMAGE_SIZE}})
 	draw.CatmullRom.Scale(scaledImg, scaledImg.Bounds(), img, img.Bounds(), draw.Src, nil)
-	return scaledImg, nil
+
+	var b bytes.Buffer
+	w := bufio.NewWriter(&b)
+	jpeg.Encode(w, scaledImg, nil)
+	return b.Bytes(), nil
 }
 
 func (profile *ProfilePanel) processEvents(gtx layout.Context) {
@@ -107,8 +113,13 @@ func (profile *ProfilePanel) processEvents(gtx layout.Context) {
 			scaledImg := image.NewRGBA(image.Rectangle{Max: image.Point{X: IMAGE_SIZE, Y: IMAGE_SIZE}})
 			draw.CatmullRom.Scale(scaledImg, scaledImg.Bounds(), subimg, subimg.Bounds(), draw.Src, nil)
 
-			profile.Avatar = scaledImg
-			profile.OnImageLoad(scaledImg)
+			var b bytes.Buffer
+			writer := bufio.NewWriter(&b)
+			jpeg.Encode(writer, scaledImg, nil)
+			imgBytes := b.Bytes()
+
+			profile.Avatar = imgBytes
+			profile.OnImageLoad(imgBytes)
 		}()
 	}
 }
@@ -134,9 +145,13 @@ func (profile *ProfilePanel) Layout(gtx layout.Context, theme *material.Theme) l
 								dim := 70
 								gtx.Constraints.Max = image.Point{X: dim, Y: dim}
 								if profile.Avatar != nil {
-									//img := image.NewRGBA(image.Rectangle{Max: image.Point{X: dim, Y: dim}})
-									//draw.CatmullRom.Scale(img, img.Bounds(), profile.Avatar, profile.Avatar.Bounds(), draw.Src, nil)
-									imgWidget := widget.Image{Src: paint.NewImageOp(profile.Avatar)}
+									decoded, _, err := image.Decode(bytes.NewReader(profile.Avatar))
+									if err != nil {
+										circle := clip.Ellipse{Max: image.Pt(dim, dim)}.Op(gtx.Ops)
+										paint.FillShape(gtx.Ops, blue, circle)
+										return layout.Dimensions{Size: image.Pt(dim, dim)}
+									}
+									imgWidget := widget.Image{Src: paint.NewImageOp(decoded)}
 									imgWidget.Scale = float32(dim) / float32(gtx.Dp(unit.Dp(float32(dim))))
 									return imgWidget.Layout(gtx)
 								} else {

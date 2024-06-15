@@ -1,9 +1,11 @@
 package ui
 
 import (
-	"example/zerochat/client/users"
+	"bytes"
+	"example/zerochat/chatProto/domain"
 	"image"
 	"image/color"
+	_ "image/jpeg"
 
 	"gioui.org/layout"
 	"gioui.org/op/clip"
@@ -15,7 +17,7 @@ import (
 )
 
 type UserCard struct {
-	user    users.UserDetails
+	user    *domain.User
 	message string
 	btn     widget.Clickable
 }
@@ -36,8 +38,14 @@ func (c *UserCard) Layout(gtx layout.Context, theme *material.Theme) layout.Dime
 								dim := gtx.Constraints.Max.Y
 								gtx.Constraints.Max = image.Point{X: dim, Y: dim}
 								if c.user.Avatar != nil {
+									decoded, _, err := image.Decode(bytes.NewReader(c.user.Avatar))
+									if err != nil {
+										circle := clip.Ellipse{Max: image.Pt(dim, dim)}.Op(gtx.Ops)
+										paint.FillShape(gtx.Ops, blue, circle)
+										return layout.Dimensions{Size: image.Pt(dim, dim)}
+									}
 									img := image.NewRGBA(image.Rectangle{Max: image.Point{X: dim, Y: dim}})
-									draw.CatmullRom.Scale(img, img.Bounds(), c.user.Avatar, c.user.Avatar.Bounds(), draw.Src, nil)
+									draw.CatmullRom.Scale(img, img.Bounds(), decoded, decoded.Bounds(), draw.Src, nil)
 									imgWidget := widget.Image{Src: paint.NewImageOp(img)}
 									imgWidget.Scale = float32(dim) / float32(gtx.Dp(unit.Dp(float32(dim))))
 									return imgWidget.Layout(gtx)
