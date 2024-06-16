@@ -26,5 +26,12 @@ jobs:
         go version
         go mod download
 
-    - name: Build
-      run: go build -v ./...
+    - name: Build server
+      run: |
+        cd server
+        go build -v .
+
+    - name: Build client
+      run: |
+        cd client
+        go build -v .
