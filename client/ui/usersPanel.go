@@ -1,8 +1,7 @@
 package ui
 
 import (
-	"example/zerochat/client/types"
-	"fmt"
+	"example/zerochat/chatProto/domain"
 
 	"gioui.org/layout"
 	"gioui.org/unit"
@@ -10,23 +9,15 @@ import (
 )
 
 type UsersPanel struct {
-	userRegistry *types.Registry
-	userList     UserList
-	selfCard     UserCard
+	userList UserList
+	selfCard UserCard
 }
 
-func CreateUsersPanel(registry *types.Registry, self types.UserDetails, changeUserChannel chan<- string) *UsersPanel {
-	if self.Avatar != nil {
-		fmt.Printf("%v\n", self.Avatar)
-	} else {
-		fmt.Println("User Panel got nil avatar")
-	}
-
+func CreateUsersPanel(client *domain.Client, changeUserChannel chan<- string) *UsersPanel {
 	return &UsersPanel{
-		userRegistry: registry,
-		selfCard:     UserCard{message: "Your Profile", user: self},
+		selfCard: UserCard{message: "Your Profile", user: client.User},
 		userList: UserList{
-			userRegistry:      registry,
+			client:            client,
 			list:              layout.List{Axis: layout.Vertical},
 			changeUserChannel: changeUserChannel,
 		},
