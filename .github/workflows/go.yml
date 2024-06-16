@@ -23,7 +23,7 @@ jobs:
       
     - name: Install dependencies
       run: |
-        go get .
+        go mod download
 
     - name: Build client
       run: go build -v ./client
