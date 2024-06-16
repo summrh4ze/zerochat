@@ -3,6 +3,7 @@ package ui
 import (
 	"bytes"
 	"example/zerochat/chatProto/domain"
+	"fmt"
 	"image"
 	"image/color"
 	_ "image/jpeg"
@@ -20,6 +21,10 @@ type UserCard struct {
 	user    *domain.User
 	message string
 	btn     widget.Clickable
+}
+
+func (c *UserCard) String() string {
+	return fmt.Sprintf("%s:%s - %s", c.user.Id, c.user.Name, c.message)
 }
 
 func (c *UserCard) Layout(gtx layout.Context, theme *material.Theme) layout.Dimensions {

@@ -62,6 +62,7 @@ func (list *UserList) getLastMessage(user *domain.User) string {
 }
 
 func (list *UserList) updateUserCards() {
+	fmt.Printf("!!!active users: %v\n", list.client.ActiveUsers)
 	users := maps.Values(list.client.ActiveUsers)
 	slices.SortFunc(users, func(a, b *domain.User) int {
 		if strings.ToLower(a.Name) < strings.ToLower(b.Name) {
@@ -98,6 +99,7 @@ func (list *UserList) updateUserCards() {
 	}
 
 	list.userCards = list.userCards[:len(users)]
+	fmt.Printf("cards: %v\n", list.userCards)
 }
 
 func (list *UserList) Layout(gtx layout.Context, theme *material.Theme) layout.Dimensions {

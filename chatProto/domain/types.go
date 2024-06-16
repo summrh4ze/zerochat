@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,4 +23,8 @@ type User struct {
 
 func CreateUser(nickName string, avatar []byte) *User {
 	return &User{Id: uuid.New().String(), Name: nickName, Avatar: avatar}
+}
+
+func (u *User) String() string {
+	return fmt.Sprintf("%s:%s", u.Id, u.Name)
 }

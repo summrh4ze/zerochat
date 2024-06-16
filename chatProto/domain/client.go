@@ -41,8 +41,8 @@ func (client *Client) connectToChatServer(hostPort string, callback func()) {
 		fmt.Println("exiting write to connection loop")
 	}()
 
-	var message Message
 	for {
+		var message Message
 		err := c.ReadJSON(&message)
 		if err != nil {
 			fmt.Printf("failed to read %s\n", err)
@@ -61,7 +61,7 @@ func (client *Client) connectToChatServer(hostPort string, callback func()) {
 			for _, u := range users {
 				client.ActiveUsers[u.Id] = u
 			}
-			fmt.Printf("clients activeUsers %v\n", client.ActiveUsers)
+			fmt.Printf("!active users: %v\n", client.ActiveUsers)
 		case chatProto.CMD_SEND_MSG_SINGLE:
 			fmt.Printf("got message from %s:%s\n", message.Sender.Id, message.Sender.Name)
 			client.ChatHistory[message.Sender.Id] = append(
@@ -72,6 +72,7 @@ func (client *Client) connectToChatServer(hostPort string, callback func()) {
 			fmt.Printf("User %s:%s connected\n", message.Sender.Id, message.Sender.Name)
 			client.ActiveUsers[message.Sender.Id] = &message.Sender
 			client.ChatHistory[message.Sender.Id] = make([]*Message, 0)
+			fmt.Printf("!!active users: %v\n", client.ActiveUsers)
 		case chatProto.CMD_USER_DISCONNECTED:
 			fmt.Printf("User %s:%s disconnected\n", message.Sender.Id, message.Sender.Name)
 			delete(client.ActiveUsers, message.Sender.Id)
