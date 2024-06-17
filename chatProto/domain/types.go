@@ -21,10 +21,19 @@ type User struct {
 	Avatar []byte
 }
 
+type Notification struct {
+	User    *User
+	Message string
+}
+
 func CreateUser(nickName string, avatar []byte) *User {
 	return &User{Id: uuid.New().String(), Name: nickName, Avatar: avatar}
 }
 
 func (u *User) String() string {
 	return fmt.Sprintf("%s:%s", u.Id, u.Name)
+}
+
+func (n *Notification) String() string {
+	return fmt.Sprintf("%s: %s", n.User.Name, n.Message)
 }

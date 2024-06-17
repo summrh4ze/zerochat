@@ -12,11 +12,12 @@ import (
 )
 
 type Client struct {
-	User        *User
-	Draft       []*Message
-	WriteChan   chan *Message
-	ActiveUsers map[string]*User
-	ChatHistory map[string][]*Message
+	User          *User
+	Draft         []*Message
+	WriteChan     chan *Message
+	ActiveUsers   map[string]*User
+	ChatHistory   map[string][]*Message
+	Notifications []Notification
 }
 
 func (client *Client) connectToChatServer(hostPort string, callback func(error)) {
@@ -71,6 +72,8 @@ func (client *Client) connectToChatServer(hostPort string, callback func(error))
 				client.ChatHistory[message.Sender.Id],
 				&message,
 			)
+			notif := Notification{User: &message.Sender, Message: string(message.Content)}
+			client.Notifications = append(client.Notifications, notif)
 		case chatProto.CMD_USER_CONNECTED:
 			log.Printf("User %s:%s connected\n", message.Sender.Id, message.Sender.Name)
 			client.ActiveUsers[message.Sender.Id] = &message.Sender

@@ -4,6 +4,7 @@ import (
 	"example/zerochat/chatProto/domain"
 	"example/zerochat/client/config"
 	"example/zerochat/client/ui"
+	"fmt"
 	"image/color"
 	"log"
 	"os"
@@ -14,10 +15,12 @@ import (
 	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
+	"gioui.org/x/notify"
 )
 
 var (
-	window *app.Window
+	window  *app.Window
+	focused bool
 )
 
 func repaint() {
@@ -56,6 +59,13 @@ func run(window *app.Window, cfg config.Config, client *domain.Client) error {
 		},
 	}
 
+	n, err := notify.NewNotifier()
+	if err != nil {
+		return fmt.Errorf("failed init notification manager: %s", err)
+	}
+	_, ongoingSupported := n.(notify.OngoingNotifier)
+	notifier := n
+
 	var ops op.Ops
 	for {
 		switch e := window.Event().(type) {
@@ -71,8 +81,21 @@ func run(window *app.Window, cfg config.Config, client *domain.Client) error {
 				chatScreen(gtx, theme, usersPanel, chatPanel)
 			}
 
+			if !focused && client != nil {
+				for _, notif := range client.Notifications {
+					if ongoingSupported {
+						go notifier.(notify.OngoingNotifier).CreateOngoingNotification(notif.User.Name, notif.Message)
+					} else {
+						go notifier.CreateNotification(notif.User.Name, notif.Message)
+					}
+				}
+				client.Notifications = client.Notifications[0:0]
+			}
+
 			// Pass the drawing operations to the GPU.
 			e.Frame(gtx.Ops)
+		case app.ConfigEvent:
+			focused = e.Config.Focused
 		}
 	}
 }
