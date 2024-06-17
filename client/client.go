@@ -85,9 +85,9 @@ func run(window *app.Window, cfg config.Config, client *domain.Client) error {
 			if !focused && client != nil {
 				for _, notif := range client.Notifications {
 					if ongoingSupported {
-						go notifier.(notify.OngoingNotifier).CreateOngoingNotification(notif.User.Name, notif.Message)
+						go notifier.(notify.OngoingNotifier).CreateOngoingNotification("Zerochat", notif.String())
 					} else {
-						go notifier.CreateNotification(notif.User.Name, notif.Message)
+						go notifier.CreateNotification("Zerochat", notif.String())
 					}
 				}
 				client.Notifications = client.Notifications[0:0]

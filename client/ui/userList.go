@@ -20,6 +20,7 @@ type UserList struct {
 	list              layout.List
 	userCards         []*UserCard
 	changeUserChannel chan<- string
+	selected          string
 }
 
 func (list *UserList) processClickEvents(gtx layout.Context) {
@@ -27,6 +28,7 @@ func (list *UserList) processClickEvents(gtx layout.Context) {
 		if card.btn.Clicked(gtx) {
 			log.Printf("click on item %d\n", i)
 			list.changeUserChannel <- card.user.Id
+			list.selected = card.user.Id
 		}
 	}
 }
@@ -86,16 +88,19 @@ func (list *UserList) updateUserCards() {
 		if i < len(list.userCards) {
 			message := list.getLastMessage(user)
 			seen := list.client.ChatHistory[user.Id].Unread
+			selected := user.Id == list.selected
 			if list.userCards[i] == nil {
 				list.userCards[i] = &UserCard{
-					user:    user,
-					message: message,
-					unread:  seen,
+					user:     user,
+					message:  message,
+					unread:   seen,
+					selected: selected,
 				}
 			} else {
 				list.userCards[i].user = user
 				list.userCards[i].message = message
 				list.userCards[i].unread = seen
+				list.userCards[i].selected = selected
 			}
 		}
 	}

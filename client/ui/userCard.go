@@ -7,6 +7,7 @@ import (
 	"image"
 	_ "image/jpeg"
 
+	"gioui.org/font"
 	"gioui.org/layout"
 	"gioui.org/op/clip"
 	"gioui.org/op/paint"
@@ -17,10 +18,11 @@ import (
 )
 
 type UserCard struct {
-	user    *domain.User
-	message string
-	btn     widget.Clickable
-	unread  bool
+	user     *domain.User
+	message  string
+	btn      widget.Clickable
+	unread   bool
+	selected bool
 }
 
 func (c *UserCard) String() string {
@@ -69,6 +71,9 @@ func (c *UserCard) Layout(gtx layout.Context, theme *material.Theme) layout.Dime
 								if c.unread {
 									label.Color = red
 								}
+								if c.selected {
+									label.Font.Weight = font.Bold
+								}
 								label.MaxLines = 1
 								label.Layout(gtx)
 								return layout.Dimensions{Size: size}
@@ -78,6 +83,9 @@ func (c *UserCard) Layout(gtx layout.Context, theme *material.Theme) layout.Dime
 								label := material.Label(theme, unit.Sp(12), c.message)
 								if c.unread {
 									label.Color = red
+								}
+								if c.selected {
+									label.Font.Weight = font.Bold
 								}
 								label.MaxLines = 1
 								label.Layout(gtx)
