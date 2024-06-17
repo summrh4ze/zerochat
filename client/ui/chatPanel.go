@@ -133,7 +133,7 @@ func (chat *ChatPanel) Layout(gtx layout.Context, theme *material.Theme) layout.
 				if len(chat.selectedUser.Name) < len(chat.client.User.Name) {
 					max = len(chat.client.User.Name)
 				}
-				max += 5
+				max += 3
 
 				display := fmt.Sprintf(
 					"%-*s%s",
