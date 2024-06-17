@@ -20,8 +20,9 @@ type Client struct {
 
 func (client *Client) connectToChatServer(hostPort string, callback func()) {
 	u := url.URL{Scheme: "ws", Host: hostPort, Path: "/chat"}
-	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	c, resp, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	if err != nil {
+		fmt.Printf("resp status: %s\n", resp.Status)
 		fmt.Printf("failed to dial websocket server %s", err)
 		return
 	}

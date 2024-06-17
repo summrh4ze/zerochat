@@ -81,6 +81,7 @@ func ReadConfig(defaultConfig Config) Config {
 		field := v.FieldByName(search)
 		//fmt.Printf("Found %#v, isValid %t, canSet: %t, kind: %s\n", field, field.IsValid(), field.CanSet(), field.Kind())
 		if field.IsValid() && field.CanSet() && field.Kind() == reflect.String {
+			fmt.Printf("setting field %s with %s\n", field.Type().Name(), parts[1])
 			field.SetString(strings.TrimSpace(parts[1]))
 		} else {
 			fmt.Printf("Error: skipping config line %d with key not recognized \"%s\"\n", i+1, line)
@@ -89,7 +90,7 @@ func ReadConfig(defaultConfig Config) Config {
 	}
 
 	if err := scanner.Err(); err != nil {
-		fmt.Println(err)
+		fmt.Printf("err in scanner: %s\n", err)
 	}
 
 	fmt.Printf("Returning config: %#v\n", defaultConfig)
