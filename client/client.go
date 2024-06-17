@@ -5,6 +5,7 @@ import (
 	"example/zerochat/client/config"
 	"example/zerochat/client/ui"
 	"fmt"
+	"image"
 	"image/color"
 	"log"
 	"os"
@@ -109,17 +110,21 @@ func chatScreen(
 	return layout.Flex{}.Layout(
 		gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			border := widget.Border{Color: color.NRGBA{A: 0xff}, Width: unit.Dp(2)}
-			return border.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return layout.UniformInset(unit.Dp(4)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return usersPanel.Layout(gtx, theme)
-				})
+			return layout.UniformInset(unit.Dp(4)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return usersPanel.Layout(gtx, theme)
 			})
 		}),
-		layout.Rigid(layout.Spacer{Width: unit.Dp(10)}.Layout),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			border := widget.Border{Color: color.NRGBA{A: 0x40}, Width: unit.Dp(1)}
+			return border.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.Dimensions{Size: image.Pt(1, gtx.Constraints.Max.Y)}
+			})
+		}),
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-			return layout.UniformInset(unit.Dp(4)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return chatPanel.Layout(gtx, theme)
+			return layout.Inset{Left: unit.Dp(10)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.UniformInset(unit.Dp(4)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return chatPanel.Layout(gtx, theme)
+				})
 			})
 		}),
 	)
