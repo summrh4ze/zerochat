@@ -5,6 +5,7 @@ import (
 	"example/zerochat/chatProto/domain"
 	"fmt"
 	"image/color"
+	"log"
 	"slices"
 
 	"gioui.org/font"
@@ -40,7 +41,7 @@ func CreateChatPanel(
 
 	go func() {
 		for id := range chatPanel.changeUserChannel {
-			fmt.Printf("READ CHANNEL CHANGE EVENT %s\n", id)
+			log.Printf("got change selected user event %s\n", id)
 			res, ok := client.ActiveUsers[id]
 			if ok {
 				chatPanel.selectedUser = res
@@ -83,7 +84,6 @@ func (chat *ChatPanel) processEvents(gtx layout.Context) {
 		}
 		if e, ok := e.(widget.SubmitEvent); ok {
 			t := e.Text
-			fmt.Printf("GOT SUBMIT EVENT WITH TEXT: %s\n", t)
 
 			// clear the input
 			chat.input.SetText("")

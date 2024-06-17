@@ -4,7 +4,6 @@ import (
 	"example/zerochat/chatProto/domain"
 	"example/zerochat/client/config"
 	"example/zerochat/client/ui"
-	"fmt"
 	"image/color"
 	"log"
 	"os"
@@ -36,7 +35,7 @@ func run(window *app.Window, cfg config.Config, client *domain.Client) error {
 
 	img, err := ui.CreateDefaultImage()
 	if err != nil {
-		fmt.Printf("failed to generate default avatar %s\n", err)
+		log.Printf("failed to generate default avatar %s\n", err)
 	}
 
 	profilePanel = &ui.ProfilePanel{
@@ -52,7 +51,6 @@ func run(window *app.Window, cfg config.Config, client *domain.Client) error {
 			chatPanel = ui.CreateChatPanel(client, usrChangedChan)
 		},
 		OnImageLoad: func(image []byte) {
-			fmt.Println("Got image. Repainting...")
 			img = image
 			repaint()
 		},
@@ -105,7 +103,15 @@ func chatScreen(
 }
 
 func main() {
+	f, err := os.OpenFile("zerochat_client.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("failed to open log file %s\n", err)
+	}
+	defer f.Close()
+	log.SetOutput(f)
+
 	cfg := config.ReadClientConfig()
+
 	go func() {
 		window = new(app.Window)
 		window.Option(

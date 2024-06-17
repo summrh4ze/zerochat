@@ -3,8 +3,8 @@ package ui
 import (
 	"example/zerochat/chatProto"
 	"example/zerochat/chatProto/domain"
-	"fmt"
 	"image/color"
+	"log"
 	"slices"
 	"strings"
 
@@ -25,7 +25,7 @@ type UserList struct {
 func (list *UserList) processClickEvents(gtx layout.Context) {
 	for i, card := range list.userCards {
 		if card.btn.Clicked(gtx) {
-			fmt.Printf("You clicked on item %d\n", i)
+			log.Printf("click on item %d\n", i)
 			list.changeUserChannel <- card.user.Id
 		}
 	}
@@ -62,7 +62,6 @@ func (list *UserList) getLastMessage(user *domain.User) string {
 }
 
 func (list *UserList) updateUserCards() {
-	fmt.Printf("!!!active users: %v\n", list.client.ActiveUsers)
 	users := maps.Values(list.client.ActiveUsers)
 	slices.SortFunc(users, func(a, b *domain.User) int {
 		if strings.ToLower(a.Name) < strings.ToLower(b.Name) {
@@ -99,7 +98,6 @@ func (list *UserList) updateUserCards() {
 	}
 
 	list.userCards = list.userCards[:len(users)]
-	fmt.Printf("cards: %v\n", list.userCards)
 }
 
 func (list *UserList) Layout(gtx layout.Context, theme *material.Theme) layout.Dimensions {

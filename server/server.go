@@ -6,8 +6,10 @@ import (
 	"example/zerochat/chatProto/domain"
 	"example/zerochat/client/config"
 	"fmt"
+	"log"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
 	"slices"
 	"sync"
 
@@ -60,7 +62,7 @@ func (hub *hub) getClient(user *domain.User) *client {
 	hub.mutex.Lock()
 	defer hub.mutex.Unlock()
 	if c, ok := hub.clients[user.Id]; !ok {
-		fmt.Printf("sender with id %s and name %s is not registered\n", user.Id, user.Name)
+		log.Printf("sender with id %s and name %s is not registered\n", user.Id, user.Name)
 		return nil
 	} else {
 		return c
@@ -68,7 +70,7 @@ func (hub *hub) getClient(user *domain.User) *client {
 }
 
 func (hub *hub) getActiveUsers(message *domain.Message) (*domain.Message, error) {
-	fmt.Printf("GET USERS TRIGGERED BY %s\n", message.Sender.Name)
+	//log.Printf("GET USERS TRIGGERED BY %s\n", message.Sender.Name)
 	if sender := hub.getClient(&message.Sender); sender == nil {
 		return nil, fmt.Errorf("failed to return users. Sender not found")
 	} else {
@@ -107,7 +109,7 @@ func (hub *hub) forwardMessage(message *domain.Message) {
 		return
 	} else {
 		if receiver := hub.getClient(&message.Reciever); receiver == nil {
-			fmt.Printf("failed to send message. Receiver does not exist")
+			log.Printf("failed to send message. Receiver does not exist")
 			return
 		} else {
 			receiver.writeChan <- message
@@ -116,7 +118,7 @@ func (hub *hub) forwardMessage(message *domain.Message) {
 }
 
 func (hub *hub) startChatServer(addr string) {
-	fmt.Printf("chat server listening on %s\n", addr)
+	log.Printf("chat server listening on %s\n", addr)
 
 	var upgrader = websocket.Upgrader{}
 
@@ -124,7 +126,7 @@ func (hub *hub) startChatServer(addr string) {
 		// upgrade the connection from http to websocket
 		c, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
-			fmt.Printf("upgrade: %s\n", err)
+			log.Printf("upgrade: %s\n", err)
 			return
 		}
 		defer c.Close()
@@ -133,7 +135,7 @@ func (hub *hub) startChatServer(addr string) {
 		var user domain.User
 		err = c.ReadJSON(&user)
 		if err != nil {
-			fmt.Printf("failed reading user data %s\n", err)
+			log.Printf("failed reading user data %s\n", err)
 			return
 		}
 
@@ -149,7 +151,7 @@ func (hub *hub) startChatServer(addr string) {
 			for msg := range client.writeChan {
 				err := c.WriteJSON(msg)
 				if err != nil {
-					fmt.Printf("failed writing json to websocket: %s\n", err)
+					log.Printf("failed writing json to websocket: %s\n", err)
 					break
 				}
 			}
@@ -160,20 +162,19 @@ func (hub *hub) startChatServer(addr string) {
 		for {
 			err := c.ReadJSON(&message)
 			if err != nil {
-				fmt.Printf("failed websocket read: %s\n", err)
+				log.Printf("failed websocket read: %s\n", err)
 				break
 			}
-			//fmt.Printf("Got websocket message %v\n", message)
 			switch message.Type {
 			case chatProto.CMD_GET_USERS:
 				resp, err := hub.getActiveUsers(&message)
 				if err != nil {
-					fmt.Printf("failed to get active users %s\n", err)
+					log.Printf("failed to get active users %s\n", err)
 					continue
 				}
 				c.WriteJSON(resp)
 			case chatProto.CMD_SEND_MSG_SINGLE:
-				fmt.Printf("SEND MESSAGE SINGLE TRIGGERED BY %s TO %s\n", message.Sender.Name, message.Reciever.Name)
+				//log.Printf("SEND MESSAGE TRIGGERED BY %s TO %s\n", message.Sender.Name, message.Reciever.Name)
 				hub.forwardMessage(&message)
 			}
 		}
@@ -185,6 +186,13 @@ func (hub *hub) startChatServer(addr string) {
 }
 
 func main() {
+	f, err := os.OpenFile("zerochat_server.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("failed to open log file %s\n", err)
+	}
+	defer f.Close()
+	log.SetOutput(f)
+
 	cfg := config.ReadServerConfig()
 	hub := InitHub()
 	hub.startChatServer(fmt.Sprintf("%s:%s", cfg.Host, cfg.Port))

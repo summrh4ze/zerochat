@@ -5,6 +5,7 @@ import (
 	"example/zerochat/chatProto"
 	"example/zerochat/client/config"
 	"fmt"
+	"log"
 	"net/url"
 
 	"github.com/gorilla/websocket"
@@ -22,7 +23,7 @@ func (client *Client) connectToChatServer(hostPort string, callback func(error))
 	u := url.URL{Scheme: "ws", Host: hostPort, Path: "/chat"}
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	if err != nil {
-		fmt.Printf("failed to dial websocket server %s", err)
+		log.Printf("failed to dial websocket server %s", err)
 		callback(err)
 		return
 	}
@@ -35,53 +36,56 @@ func (client *Client) connectToChatServer(hostPort string, callback func(error))
 		for msg := range client.WriteChan {
 			err := c.WriteJSON(msg)
 			if err != nil {
-				fmt.Printf("failed writing json to websocket: %s\n", err)
+				log.Printf("failed writing json to websocket: %s\n", err)
 				break
 			}
 		}
-		fmt.Println("exiting write to connection loop")
+		log.Println("exit gorutine that reads from write channel")
 	}()
 
 	for {
 		var message Message
 		err := c.ReadJSON(&message)
 		if err != nil {
-			fmt.Printf("failed to read %s\n", err)
+			log.Printf("failed to read %s\n", err)
 			break
 		}
-		//fmt.Printf("recv: %s", message)
+
 		switch message.Type {
 		case chatProto.CMD_GET_USERS_RESPONSE:
+			log.Printf("request current active users on server\n")
 			users := make([]*User, 0)
 			err := json.Unmarshal(message.Content, &users)
 			if err != nil {
-				fmt.Printf("failed to unmarshall json with users %s\n", err)
+				log.Printf("failed to unmarshall json with users %s\n", err)
 				continue
 			}
 			clear(client.ActiveUsers)
 			for _, u := range users {
 				client.ActiveUsers[u.Id] = u
 			}
-			fmt.Printf("!active users: %v\n", client.ActiveUsers)
+			log.Printf("active users: %v\n", client.ActiveUsers)
 		case chatProto.CMD_SEND_MSG_SINGLE:
-			fmt.Printf("got message from %s:%s\n", message.Sender.Id, message.Sender.Name)
+			log.Printf("got message from %s:%s\n", message.Sender.Id, message.Sender.Name)
 			client.ChatHistory[message.Sender.Id] = append(
 				client.ChatHistory[message.Sender.Id],
 				&message,
 			)
 		case chatProto.CMD_USER_CONNECTED:
-			fmt.Printf("User %s:%s connected\n", message.Sender.Id, message.Sender.Name)
+			log.Printf("User %s:%s connected\n", message.Sender.Id, message.Sender.Name)
 			client.ActiveUsers[message.Sender.Id] = &message.Sender
 			client.ChatHistory[message.Sender.Id] = make([]*Message, 0)
-			fmt.Printf("!!active users: %v\n", client.ActiveUsers)
+			log.Printf("active users: %v\n", client.ActiveUsers)
 		case chatProto.CMD_USER_DISCONNECTED:
-			fmt.Printf("User %s:%s disconnected\n", message.Sender.Id, message.Sender.Name)
+			log.Printf("User %s:%s disconnected\n", message.Sender.Id, message.Sender.Name)
 			delete(client.ActiveUsers, message.Sender.Id)
 			delete(client.ChatHistory, message.Sender.Id)
+			log.Printf("active users: %v\n", client.ActiveUsers)
 		}
 		callback(nil)
 	}
 	close(client.WriteChan)
+	log.Println("exit gorutine connectToChatServer")
 }
 
 func InitClientConnection(

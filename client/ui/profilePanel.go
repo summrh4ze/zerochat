@@ -3,9 +3,9 @@ package ui
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"image"
 	"image/jpeg"
+	"log"
 	"os"
 
 	"gioui.org/layout"
@@ -40,13 +40,13 @@ type ProfilePanel struct {
 func CreateDefaultImage() ([]byte, error) {
 	data, err := os.ReadFile("placeholder.png")
 	if err != nil {
-		fmt.Printf("Error %s\n", err)
+		log.Printf("Error %s\n", err)
 		return nil, err
 	}
 	reader := bytes.NewReader([]byte(data))
 	img, _, err := image.Decode(reader)
 	if err != nil {
-		fmt.Printf("Error decoding placeholder %s\n", err)
+		log.Printf("Error decoding placeholder %s\n", err)
 		return nil, err
 	}
 
@@ -74,14 +74,14 @@ func (profile *ProfilePanel) processEvents(gtx layout.Context) {
 		go func() {
 			file, err := profile.expl.ChooseFile("png", "jpeg", "jpg")
 			if err != nil {
-				fmt.Println(err)
+				log.Println(err)
 				profile.imgChan <- imageResult{err: err}
 				return
 			}
 			defer file.Close()
 			imgData, _, err := image.Decode(file)
 			if err != nil {
-				fmt.Println(err)
+				log.Println(err)
 				profile.imgChan <- imageResult{err: err}
 				return
 			}
@@ -90,9 +90,8 @@ func (profile *ProfilePanel) processEvents(gtx layout.Context) {
 
 		go func() {
 			img := <-profile.imgChan
-			fmt.Println("channel received image")
 			if img.err != nil {
-				fmt.Println(img.err)
+				log.Println(img.err)
 				return
 			}
 			w := img.imageData.Bounds().Dx()
