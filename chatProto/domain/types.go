@@ -26,6 +26,11 @@ type Notification struct {
 	Message string
 }
 
+type ChatHistory struct {
+	Messages []*Message
+	Unread   bool
+}
+
 func CreateUser(nickName string, avatar []byte) *User {
 	return &User{Id: uuid.New().String(), Name: nickName, Avatar: avatar}
 }

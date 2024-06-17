@@ -21,6 +21,7 @@ type UserCard struct {
 	user    *domain.User
 	message string
 	btn     widget.Clickable
+	unread  bool
 }
 
 func (c *UserCard) String() string {
@@ -68,6 +69,9 @@ func (c *UserCard) Layout(gtx layout.Context, theme *material.Theme) layout.Dime
 								layout.Flexed(0.5, func(gtx layout.Context) layout.Dimensions {
 									size := gtx.Constraints.Max
 									label := material.Label(theme, unit.Sp(16), c.user.Name)
+									if c.unread {
+										label.Color = red
+									}
 									label.MaxLines = 1
 									label.Layout(gtx)
 									return layout.Dimensions{Size: size}
@@ -75,6 +79,9 @@ func (c *UserCard) Layout(gtx layout.Context, theme *material.Theme) layout.Dime
 								layout.Flexed(0.5, func(gtx layout.Context) layout.Dimensions {
 									size := gtx.Constraints.Max
 									label := material.Label(theme, unit.Sp(12), c.message)
+									if c.unread {
+										label.Color = red
+									}
 									label.MaxLines = 1
 									label.Layout(gtx)
 									return layout.Dimensions{Size: size}

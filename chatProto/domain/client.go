@@ -16,7 +16,7 @@ type Client struct {
 	Draft         []*Message
 	WriteChan     chan *Message
 	ActiveUsers   map[string]*User
-	ChatHistory   map[string][]*Message
+	ChatHistory   map[string]ChatHistory
 	Notifications []Notification
 }
 
@@ -68,16 +68,22 @@ func (client *Client) connectToChatServer(hostPort string, callback func(error))
 			log.Printf("active users: %v\n", client.ActiveUsers)
 		case chatProto.CMD_SEND_MSG_SINGLE:
 			log.Printf("got message from %s:%s\n", message.Sender.Id, message.Sender.Name)
-			client.ChatHistory[message.Sender.Id] = append(
-				client.ChatHistory[message.Sender.Id],
+			history := client.ChatHistory[message.Sender.Id]
+			history.Messages = append(
+				history.Messages,
 				&message,
 			)
+			history.Unread = true
+			client.ChatHistory[message.Sender.Id] = history
 			notif := Notification{User: &message.Sender, Message: string(message.Content)}
 			client.Notifications = append(client.Notifications, notif)
 		case chatProto.CMD_USER_CONNECTED:
 			log.Printf("User %s:%s connected\n", message.Sender.Id, message.Sender.Name)
 			client.ActiveUsers[message.Sender.Id] = &message.Sender
-			client.ChatHistory[message.Sender.Id] = make([]*Message, 0)
+			client.ChatHistory[message.Sender.Id] = ChatHistory{
+				Messages: make([]*Message, 0),
+				Unread:   false,
+			}
 			log.Printf("active users: %v\n", client.ActiveUsers)
 		case chatProto.CMD_USER_DISCONNECTED:
 			log.Printf("User %s:%s disconnected\n", message.Sender.Id, message.Sender.Name)
@@ -105,7 +111,7 @@ func InitClientConnection(
 		Draft:       make([]*Message, 0),
 		WriteChan:   make(chan *Message, 1),
 		ActiveUsers: make(map[string]*User),
-		ChatHistory: make(map[string][]*Message),
+		ChatHistory: make(map[string]ChatHistory),
 	}
 	go client.connectToChatServer(hostPort, callback)
 

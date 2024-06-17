@@ -63,7 +63,7 @@ func (chat *ChatPanel) getMessages() []*domain.Message {
 		if !ok {
 			return []*domain.Message{}
 		}
-		messages = chatHistory
+		messages = chatHistory.Messages
 	}
 	slices.SortFunc(messages, func(a, b *domain.Message) int {
 		if a.Timestamp.Before(b.Timestamp) {
@@ -73,6 +73,12 @@ func (chat *ChatPanel) getMessages() []*domain.Message {
 		}
 		return 1
 	})
+
+	//update chathistory unread to false
+	history := chat.client.ChatHistory[chat.selectedUser.Id]
+	history.Unread = false
+	chat.client.ChatHistory[chat.selectedUser.Id] = history
+
 	return messages
 }
 
@@ -98,8 +104,9 @@ func (chat *ChatPanel) processEvents(gtx layout.Context) {
 					Content:  []byte(t),
 				}
 				chat.client.WriteChan <- msg
-				chatHistory := chat.client.ChatHistory[chat.selectedUser.Id]
-				chat.client.ChatHistory[chat.selectedUser.Id] = append(chatHistory, msg)
+				history := chat.client.ChatHistory[chat.selectedUser.Id]
+				history.Messages = append(history.Messages, msg)
+				chat.client.ChatHistory[chat.selectedUser.Id] = history
 			} else {
 				msg := &domain.Message{
 					Type:     chatProto.CMD_SEND_MSG_SINGLE,

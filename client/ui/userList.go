@@ -43,10 +43,10 @@ func filterMessages(messages []*domain.Message) []*domain.Message {
 
 func (list *UserList) getLastMessage(user *domain.User) string {
 	message := "Say Hi!"
-	chatHistory := list.client.ChatHistory[user.Id]
-	if len(chatHistory) > 0 {
-		chatHistory = filterMessages(chatHistory)
-		slices.SortFunc(chatHistory, func(a, b *domain.Message) int {
+	historyMsgs := list.client.ChatHistory[user.Id].Messages
+	if len(historyMsgs) > 0 {
+		historyMsgs = filterMessages(historyMsgs)
+		slices.SortFunc(historyMsgs, func(a, b *domain.Message) int {
 			if a.Timestamp.Before(b.Timestamp) {
 				return -1
 			} else if a.Timestamp.After(b.Timestamp) {
@@ -54,8 +54,8 @@ func (list *UserList) getLastMessage(user *domain.User) string {
 			}
 			return 0
 		})
-		if len(chatHistory) > 0 {
-			return string(chatHistory[len(chatHistory)-1].Content)
+		if len(historyMsgs) > 0 {
+			return string(historyMsgs[len(historyMsgs)-1].Content)
 		}
 	}
 	return message
@@ -85,14 +85,17 @@ func (list *UserList) updateUserCards() {
 	for i, user := range users {
 		if i < len(list.userCards) {
 			message := list.getLastMessage(user)
+			seen := list.client.ChatHistory[user.Id].Unread
 			if list.userCards[i] == nil {
 				list.userCards[i] = &UserCard{
 					user:    user,
 					message: message,
+					unread:  seen,
 				}
 			} else {
 				list.userCards[i].user = user
 				list.userCards[i].message = message
+				list.userCards[i].unread = seen
 			}
 		}
 	}
