@@ -18,12 +18,12 @@ type Client struct {
 	ChatHistory map[string][]*Message
 }
 
-func (client *Client) connectToChatServer(hostPort string, callback func()) {
+func (client *Client) connectToChatServer(hostPort string, callback func(error)) {
 	u := url.URL{Scheme: "ws", Host: hostPort, Path: "/chat"}
-	c, resp, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	if err != nil {
-		fmt.Printf("resp status: %s\n", resp.Status)
 		fmt.Printf("failed to dial websocket server %s", err)
+		callback(err)
 		return
 	}
 	defer c.Close()
@@ -79,20 +79,24 @@ func (client *Client) connectToChatServer(hostPort string, callback func()) {
 			delete(client.ActiveUsers, message.Sender.Id)
 			delete(client.ChatHistory, message.Sender.Id)
 		}
-		callback()
+		callback(nil)
 	}
 	close(client.WriteChan)
 }
 
-func InitClientConnection(nickName string, avatar []byte, callback func()) *Client {
+func InitClientConnection(
+	nickName string,
+	avatar []byte,
+	cfg config.Config,
+	callback func(error),
+) *Client {
 	// First connect to the client
-	cfg := config.ReadClientConfig()
 	hostPort := fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)
 	user := CreateUser(nickName, avatar)
 	client := &Client{
 		User:        user,
 		Draft:       make([]*Message, 0),
-		WriteChan:   make(chan *Message),
+		WriteChan:   make(chan *Message, 1),
 		ActiveUsers: make(map[string]*User),
 		ChatHistory: make(map[string][]*Message),
 	}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"example/zerochat/chatProto/domain"
+	"example/zerochat/client/config"
 	"example/zerochat/client/ui"
 	"fmt"
 	"image/color"
@@ -26,7 +27,7 @@ func repaint() {
 	}
 }
 
-func run(window *app.Window, client *domain.Client) error {
+func run(window *app.Window, cfg config.Config, client *domain.Client) error {
 	theme := material.NewTheme()
 	usrChangedChan := make(chan string)
 	var usersPanel *ui.UsersPanel
@@ -41,7 +42,10 @@ func run(window *app.Window, client *domain.Client) error {
 	profilePanel = &ui.ProfilePanel{
 		Avatar: img,
 		OnConfirm: func(nickName string) {
-			client = domain.InitClientConnection(nickName, img, func() {
+			client = domain.InitClientConnection(nickName, img, cfg, func(err error) {
+				if err != nil {
+					usersPanel.ConnError = true
+				}
 				repaint()
 			})
 			usersPanel = ui.CreateUsersPanel(client, usrChangedChan)
@@ -101,6 +105,7 @@ func chatScreen(
 }
 
 func main() {
+	cfg := config.ReadClientConfig()
 	go func() {
 		window = new(app.Window)
 		window.Option(
@@ -108,7 +113,7 @@ func main() {
 			app.Size(unit.Dp(800), unit.Dp(500)),
 			app.MinSize(unit.Dp(600), unit.Dp(400)),
 		)
-		err := run(window, nil)
+		err := run(window, cfg, nil)
 		if err != nil {
 			log.Fatal(err)
 		}

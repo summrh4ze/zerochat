@@ -9,8 +9,9 @@ import (
 )
 
 type UsersPanel struct {
-	userList UserList
-	selfCard UserCard
+	userList  UserList
+	selfCard  UserCard
+	ConnError bool
 }
 
 func CreateUsersPanel(client *domain.Client, changeUserChannel chan<- string) *UsersPanel {
@@ -36,7 +37,14 @@ func (up *UsersPanel) Layout(gtx layout.Context, theme *material.Theme) layout.D
 		gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return layout.Inset{Bottom: unit.Dp(10), Left: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				title := material.H6(theme, "You")
+				var title material.LabelStyle
+				if up.ConnError {
+					title = material.H6(theme, "You - No Connection")
+					title.Color = red
+				} else {
+					title = material.H6(theme, "You")
+				}
+
 				return title.Layout(gtx)
 			})
 		}),
