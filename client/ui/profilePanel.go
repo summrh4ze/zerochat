@@ -3,10 +3,11 @@ package ui
 import (
 	"bufio"
 	"bytes"
+	"embed"
+	_ "embed"
 	"image"
 	"image/jpeg"
 	"log"
-	"os"
 
 	"gioui.org/layout"
 	"gioui.org/op/clip"
@@ -20,6 +21,9 @@ import (
 )
 
 const IMAGE_SIZE = 70
+
+//go:embed placeholder.png
+var fs embed.FS
 
 type imageResult struct {
 	imageData image.Image
@@ -38,7 +42,7 @@ type ProfilePanel struct {
 }
 
 func CreateDefaultImage() ([]byte, error) {
-	data, err := os.ReadFile("placeholder.png")
+	data, err := fs.ReadFile("placeholder.png")
 	if err != nil {
 		log.Printf("Error %s\n", err)
 		return nil, err
